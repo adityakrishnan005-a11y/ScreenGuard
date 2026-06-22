@@ -1,0 +1,28 @@
+# Maintainer: ScreenGuard <noreply@example.com>
+pkgname=screenguard
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Screen time tracker for Linux (Flutter GUI + Dart daemon)"
+arch=('x86_64')
+url="https://example.com/screenguard"
+license=('GPL3')
+depends=('xdotool' 'xorg-xprop' 'xprintidle' 'gtk3' 'sqlite' 'python' 'python-atspi')
+makedepends=('flutter' 'dart')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  flutter pub get
+  flutter build linux --release
+  dart compile exe bin/daemon.dart -o build/linux/x64/release/bundle/screenguard-daemon
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 build/linux/x64/release/bundle/screenguard "$pkgdir/usr/bin/screenguard"
+  install -Dm755 build/linux/x64/release/bundle/screenguard-daemon "$pkgdir/usr/bin/screenguard-daemon"
+  install -Dm644 linux/screenguard.service "$pkgdir/usr/lib/systemd/user/screenguard.service"
+  install -Dm644 linux/screenguard.desktop "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm755 bin/active_window_helper.py "$pkgdir/usr/share/screenguard/active_window_helper.py"
+}
