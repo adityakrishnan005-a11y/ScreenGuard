@@ -7,6 +7,7 @@ URL:            https://github.com/adityakrishnan005-a11y/ScreenGuard
 Source0:        %{url}/releases/download/v%{version}/screenguard-%{version}-x86_64.tar.gz
 
 BuildArch:      x86_64
+%global debug_package %{nil}
 Requires:       xdotool
 Requires:       gtk3
 Requires:       sqlite
@@ -19,7 +20,7 @@ with daily/weekly breakdowns, daily app-limit lockouts, and a Focus/Pomodoro
 timer. Works on GNOME Wayland (via a bundled Shell extension) and X11.
 
 %prep
-%setup -q -n screenguard
+%setup -q -c -n screenguard-build
 
 %install
 # Main bundle
