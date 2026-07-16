@@ -284,6 +284,17 @@ class DatabaseService {
         .cast<Map<String, dynamic>>();
   }
 
+  int getIdleTimeForDate(DateTime date) {
+    final start = DateTime(date.year, date.month, date.day).millisecondsSinceEpoch;
+    final end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+
+    final rows = db.select(
+      "SELECT COALESCE(SUM(duration_ms), 0) AS t FROM sessions WHERE idle=1 AND started_at >= ? AND started_at <= ?;",
+      [start, end],
+    );
+    return rows.first['t'] as int;
+  }
+
   List<Map<String, dynamic>> getWeekData({int weekOffset = 0}) {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);

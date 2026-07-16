@@ -17,7 +17,8 @@ Color getAppColor(int index) {
 
 class AppPieChart extends StatefulWidget {
   final List<Map<String, dynamic>> perApp;
-  const AppPieChart({super.key, required this.perApp});
+  final int idleMs;
+  const AppPieChart({super.key, required this.perApp, this.idleMs = 0});
 
   @override
   State<AppPieChart> createState() => _AppPieChartState();
@@ -28,26 +29,21 @@ class _AppPieChartState extends State<AppPieChart> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.perApp.isEmpty) {
-      return const Center(
-          child: Padding(
-        padding: EdgeInsets.all(24.0),
-        child: Text('No usage data today', style: TextStyle(color: Colors.grey)),
-      ));
-    }
+    final activeMs = widget.perApp.fold<int>(0, (sum, a) => sum + (a['t'] as int));
+    final idleMs = widget.idleMs;
+    final totalMs = activeMs + idleMs;
 
-    final totalMs = widget.perApp.fold<int>(0, (sum, a) => sum + (a['t'] as int));
     if (totalMs == 0) {
       return const Center(
           child: Padding(
         padding: EdgeInsets.all(24.0),
-        child: Text('No active usage', style: TextStyle(color: Colors.grey)),
+        child: Text('No active usage today', style: TextStyle(color: Colors.grey)),
       ));
     }
 
     final sections = <PieChartSectionData>[];
-    final displayApps = widget.perApp.take(5).toList();
-    final otherMs = widget.perApp.skip(5).fold<int>(0, (sum, a) => sum + (a['t'] as int));
+    final displayApps = widget.perApp.take(4).toList();
+    final otherMs = widget.perApp.skip(4).fold<int>(0, (sum, a) => sum + (a['t'] as int));
 
     for (var i = 0; i < displayApps.length; i++) {
       final item = displayApps[i];
@@ -77,6 +73,24 @@ class _AppPieChartState extends State<AppPieChart> {
       sections.add(PieChartSectionData(
         color: color,
         value: otherMs.toDouble(),
+        title: pct >= 8 ? '${pct.toStringAsFixed(0)}%' : '',
+        radius: isTouched ? 44.0 : 36.0,
+        titleStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ));
+    }
+
+    const idleColor = Color(0xFF78909C); // Blue Grey / Slate
+    if (idleMs > 0) {
+      final pct = (idleMs / totalMs * 100);
+      final idleIndex = displayApps.length + (otherMs > 0 ? 1 : 0);
+      final isTouched = idleIndex == _touchedIndex;
+      sections.add(PieChartSectionData(
+        color: idleColor,
+        value: idleMs.toDouble(),
         title: pct >= 8 ? '${pct.toStringAsFixed(0)}%' : '',
         radius: isTouched ? 44.0 : 36.0,
         titleStyle: const TextStyle(
@@ -131,6 +145,11 @@ class _AppPieChartState extends State<AppPieChart> {
               _LegendItem(
                 color: getAppColor(displayApps.length),
                 label: 'Other',
+              ),
+            if (idleMs > 0)
+              const _LegendItem(
+                color: idleColor,
+                label: 'Idle / Away',
               ),
           ],
         ),

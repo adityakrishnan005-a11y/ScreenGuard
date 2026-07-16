@@ -20,6 +20,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _today = 0;
   int _yesterday = 0;
   int _last30DaysTotal = 0;
+  int _idleToday = 0;
   List<Map<String, dynamic>> _perApp = [];
   List<Map<String, dynamic>> _weekData = [];
   final int _goal = 8 * 3600 * 1000;
@@ -68,6 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _last30DaysTotal = db.last30DaysTotalMs();
       _weekData = db.getWeekData(weekOffset: _weekOffset);
       _perApp = db.perAppForDate(_selectedDate);
+      _idleToday = db.getIdleTimeForDate(_selectedDate);
       _untracked = db.recentUnknownSessions();
     });
   }
@@ -178,7 +180,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 flex: 3,
                                 child: _buildHeroCard(
                                   title: 'App Share (${_formatDateHeader(_selectedDate)})',
-                                  child: AppPieChart(perApp: _perApp),
+                                  child: Column(
+                                    children: [
+                                      AppPieChart(
+                                        perApp: _perApp,
+                                        idleMs: _idleToday,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _buildActiveIdleBreakdownRow(),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -190,7 +201,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               const SizedBox(height: 16),
                               _buildHeroCard(
                                 title: 'App Share (${_formatDateHeader(_selectedDate)})',
-                                child: AppPieChart(perApp: _perApp),
+                                child: Column(
+                                  children: [
+                                    AppPieChart(
+                                      perApp: _perApp,
+                                      idleMs: _idleToday,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _buildActiveIdleBreakdownRow(),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -360,6 +380,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildActiveIdleBreakdownRow() {
+    final activeMs = _perApp.fold<int>(0, (sum, a) => sum + (a['t'] as int));
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.teal,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Active: ${formatDuration(activeMs)}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF78909C),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Idle: ${formatDuration(_idleToday)}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
