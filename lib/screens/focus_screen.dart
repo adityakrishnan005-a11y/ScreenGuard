@@ -18,7 +18,7 @@ class _FocusScreenState extends State<FocusScreen> {
   int _remainingSeconds = 0;
   bool _isActive = false;
   Set<String> _distractingApps = {};
-  List<Map<String, dynamic>> _allTrackedApps = [];
+  List<Map<String, dynamic>> _allApps = [];
   final AppResolver _resolver = AppResolver();
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -42,11 +42,38 @@ class _FocusScreenState extends State<FocusScreen> {
     final db = Provider.of<DatabaseService>(context, listen: false);
     final state = db.getActiveFocusState();
     final apps = db.getDistractingApps();
+
+    // Build a lookup of DB-tracked totals keyed by app id
     final tracked = db.allTrackedApps();
+    final trackedTotals = <String, int>{};
+    for (final row in tracked) {
+      trackedTotals[row['app'] as String] = (row['t'] as int?) ?? 0;
+    }
+
+    // Get every installed app from .desktop files, overlay DB totals
+    final installed = _resolver.listAllApps();
+    final seenApps = <String>{};
+    final merged = <Map<String, dynamic>>[];
+    for (final entry in installed) {
+      final appId = entry['app']!;
+      seenApps.add(appId);
+      merged.add({
+        'app': appId,
+        'app_name': entry['name']!,
+        't': trackedTotals[appId] ?? 0,
+      });
+    }
+    // Include any tracked apps whose .desktop wasn't found on disk
+    for (final row in tracked) {
+      final appId = row['app'] as String;
+      if (!seenApps.contains(appId)) {
+        merged.add(row);
+      }
+    }
 
     setState(() {
       _distractingApps = apps;
-      _allTrackedApps = tracked;
+      _allApps = merged;
       if (state != null) {
         final endTime = state['end_time_ms'] as int;
         final now = DateTime.now().millisecondsSinceEpoch;
@@ -59,6 +86,7 @@ class _FocusScreenState extends State<FocusScreen> {
       }
     });
   }
+
 
   void _updateTimer() {
     final db = Provider.of<DatabaseService>(context, listen: false);
@@ -123,7 +151,7 @@ class _FocusScreenState extends State<FocusScreen> {
 
     final presets = [15, 25, 45, 60];
 
-    final filteredApps = _allTrackedApps.where((item) {
+    final filteredApps = _allApps.where((item) {
       final name = (item['app_name'] as String? ?? item['app'] as String).toLowerCase();
       return name.contains(_searchQuery.toLowerCase());
     }).toList();
@@ -339,7 +367,7 @@ class _FocusScreenState extends State<FocusScreen> {
                       TextField(
                         controller: _searchController,
                         decoration: const InputDecoration(
-                          hintText: 'Search tracked apps...',
+                          hintText: 'Search installed apps...',
                           prefixIcon: Icon(Icons.search),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -354,7 +382,7 @@ class _FocusScreenState extends State<FocusScreen> {
                       if (filteredApps.isEmpty)
                         const Padding(
                           padding: EdgeInsets.all(16.0),
-                          child: Text('No matching apps found in tracking history.',
+                          child: Text('No matching apps found.',
                               style: TextStyle(color: Colors.grey)),
                         )
                       else
@@ -379,7 +407,7 @@ class _FocusScreenState extends State<FocusScreen> {
                                     fontWeight: FontWeight.w600, fontSize: 14),
                               ),
                               subtitle: Text(
-                                'Total tracked: ${formatDuration(totalMs)}',
+                                totalMs > 0 ? 'Total tracked: ${formatDuration(totalMs)}' : 'Not yet tracked',
                                 style: const TextStyle(fontSize: 12),
                               ),
                               onChanged: (_) {

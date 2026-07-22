@@ -76,7 +76,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final maxApp = _perApp.isEmpty ? 0 : (_perApp.first['t'] as int);
+    final maxApp = _perApp.isEmpty ? 0 : ((_perApp.first['t'] as int?) ?? 0);
     final isTodaySelected = _isSameDay(_selectedDate, DateTime.now());
 
     return Scaffold(
@@ -292,7 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     final color = getAppColor(index);
                     return AppListTile(
                       name: appName,
-                      ms: a['t'] as int,
+                      ms: (a['t'] as int?) ?? 0,
                       maxMs: maxApp,
                       color: color,
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(
@@ -339,8 +339,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.chevron_left, size: 24),
+                      icon: const Icon(Icons.chevron_left_rounded, size: 22),
                       tooltip: 'Previous Week',
+                      splashRadius: 18,
                       onPressed: () {
                         setState(() {
                           _weekOffset += 1;
@@ -349,8 +350,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       },
                     ),
                     IconButton(
-                      icon: const Icon(Icons.chevron_right, size: 24),
+                      icon: const Icon(Icons.chevron_right_rounded, size: 22),
                       tooltip: 'Next Week',
+                      splashRadius: 18,
                       onPressed: _weekOffset > 0
                           ? () {
                               setState(() {
@@ -385,7 +387,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildActiveIdleBreakdownRow() {
-    final activeMs = _perApp.fold<int>(0, (sum, a) => sum + (a['t'] as int));
+    final activeMs = _perApp.fold<int>(0, (sum, a) => sum + ((a['t'] as int?) ?? 0));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
