@@ -40,9 +40,23 @@ if [ -n "${REAL_USER:-}" ] && [ "$REAL_USER" != "root" ] && command -v flatpak >
     log "installed ScreenGuard GNOME extension for user $REAL_USER"
   fi
   sudo -u "$REAL_USER" gnome-extensions enable screenguard@screenguard.app 2>/dev/null || true
+
+  # 3) Enable and start the systemd user daemon for the active user session
+  USER_ID=$(id -u "$REAL_USER" 2>/dev/null || true)
+  if [ -n "${USER_ID:-}" ]; then
+    sudo -u "$REAL_USER" XDG_RUNTIME_DIR="/run/user/$USER_ID" systemctl --user daemon-reload 2>/dev/null || true
+    sudo -u "$REAL_USER" XDG_RUNTIME_DIR="/run/user/$USER_ID" systemctl --user enable --now screenguard.service 2>/dev/null \
+      && log "enabled and started screenguard.service for user $REAL_USER" || true
+  fi
 fi
 
-# 3) Enable toolkit-accessibility system-wide via a dconf system database so every
+# 4) Enable systemd user service globally for all future user logins
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl --global enable screenguard.service 2>/dev/null \
+    && log "enabled screenguard.service globally for all users" || true
+fi
+
+# 5) Enable toolkit-accessibility system-wide via a dconf system database so every
 #    user's apps build their accessibility tree (no per-user gsettings fragility).
 mkdir -p /etc/dconf/db/local.d
 cat > /etc/dconf/db/local.d/00-screenguard <<'EOF'
@@ -53,5 +67,5 @@ if command -v dconf >/dev/null 2>&1; then
   dconf update && log "set toolkit-accessibility=true (system-wide)" || true
 fi
 
-log "done. ScreenGuard extension and Flatpak tracking configured."
-log "Note: already-running apps pick up AT-SPI on their next focus / relaunch."
+log "done. ScreenGuard extension, tracking daemon, and Flatpak permissions configured."
+log "Ready to use! Open 'ScreenGuard' from your application menu."
