@@ -1,28 +1,44 @@
-# Maintainer: ScreenGuard <noreply@example.com>
+# Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
 pkgname=screenguard
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Screen time tracker for Linux (Flutter GUI + Dart daemon)"
 arch=('x86_64')
-url="https://example.com/screenguard"
-license=('GPL3')
-depends=('xdotool' 'xorg-xprop' 'xprintidle' 'gtk3' 'sqlite' 'python' 'python-atspi')
-makedepends=('flutter' 'dart')
-source=("$pkgname-$pkgver.tar.gz")
-sha256sums=('SKIP')
-
-build() {
-  cd "$pkgname-$pkgver"
-  flutter pub get
-  flutter build linux --release
-  dart compile exe bin/daemon.dart -o build/linux/x64/release/bundle/screenguard-daemon
-}
+url="https://github.com/adityakrishnan005-a11y/ScreenGuard"
+license=('GPL-3.0-only')
+depends=('xdotool' 'xorg-xprop' 'gtk3' 'sqlite')
+optdepends=(
+  'xprintidle: idle-time detection on X11 (required for KDE/X11 sessions)'
+  'gnome-shell: GNOME Shell extension support (primary Wayland backend)'
+  'python: active window helper script'
+)
+provides=('screenguard')
+conflicts=('screenguard-git')
+source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/$pkgname-$pkgver-x86_64.tar.gz")
+sha256sums=('dd5c71f274a0de0b9f8d45db6386d47a050eb19ad65169dfa490ac963e5797a3')
 
 package() {
-  cd "$pkgname-$pkgver"
-  install -Dm755 build/linux/x64/release/bundle/screenguard "$pkgdir/usr/bin/screenguard"
-  install -Dm755 build/linux/x64/release/bundle/screenguard-daemon "$pkgdir/usr/bin/screenguard-daemon"
+  cd "$srcdir/screenguard"
+
+  # Core application bundle -> /opt/screenguard
+  install -d "$pkgdir/opt/screenguard"
+  cp -a screenguard screenguard-daemon data lib "$pkgdir/opt/screenguard/"
+
+  # Executable symlinks in PATH
+  install -d "$pkgdir/usr/bin"
+  ln -s /opt/screenguard/screenguard "$pkgdir/usr/bin/screenguard"
+  ln -s /opt/screenguard/screenguard-daemon "$pkgdir/usr/bin/screenguard-daemon"
+
+  # systemd user service + desktop file
   install -Dm644 linux/screenguard.service "$pkgdir/usr/lib/systemd/user/screenguard.service"
   install -Dm644 linux/screenguard.desktop "$pkgdir/usr/share/applications/screenguard.desktop"
+
+  # Helper scripts
   install -Dm755 bin/active_window_helper.py "$pkgdir/usr/share/screenguard/active_window_helper.py"
+  install -Dm755 tools/enable_fedora_a11y.sh "$pkgdir/usr/share/screenguard/enable_fedora_a11y.sh"
+
+  # GNOME Shell extension
+  install -d "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app"
+  install -Dm644 extension/metadata.json "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json"
+  install -Dm755 extension/extension.js "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/extension.js"
 }

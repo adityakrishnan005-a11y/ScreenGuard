@@ -1,0 +1,82 @@
+name: Update Arch Repo
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install build tooling
+        run: pacman -Syu --noconfirm base-devel git
+
+      - uses: actions/checkout@v4
+
+      - name: Configure GPG
+        run: |
+          mkdir -p ~/.gnupg && chmod 700 ~/.gnupg
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent
+
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+
+      - name: Build package
+        run: |
+          pacman -S --noconfirm xdotool xorg-xprop gtk3 sqlite
+          useradd -m builder
+          chown -R builder:builder .
+          cd packaging
+          su builder -c "makepkg --noconfirm"
+
+      - name: Sign package
+        run: |
+          cd packaging
+          PKG=$(ls screenguard-*.pkg.tar.zst)
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            -abs -o "$PKG.sig" "$PKG"
+
+      - name: Build repository
+        run: |
+          mkdir -p repo/x86_64
+          cp packaging/screenguard-*.pkg.tar.zst* repo/x86_64/
+          cd repo/x86_64
+          repo-add screenguard.db.tar.zst *.pkg.tar.zst
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            -abs -o screenguard.db.tar.zst.sig screenguard.db.tar.zst
+          gpg --batch --export --armor > ../../key.asc
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-repo
+          path: repo
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: arch-repo
+          path: repo
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: repo
+          destination_dir: arch
+          force_orphan: false
