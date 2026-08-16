@@ -1,0 +1,78 @@
+name: Update APT Repo
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download .deb from release
+        run: |
+          mkdir -p debs
+          gh release download "${{ github.event.release.tag_name }}" -p '*.deb' -D debs/
+          ls -la debs/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+
+      - name: Set up APT repo structure
+        run: |
+          mkdir -p repo/dists/apt/main/binary-amd64
+          cp debs/*.deb repo/dists/apt/main/binary-amd64/
+
+      - name: Generate Packages
+        run: |
+          cd repo
+          apt-ftparchive \
+            --architecture=amd64 \
+            --md5 \
+            --sha1 \
+            --sha256 \
+            --sha512 \
+            contents dists/apt/main/binary-amd64/ \
+            > dists/apt/main/binary-amd64/Packages
+          gzip -k -f dists/apt/main/binary-amd64/Packages
+
+      - name: Generate Release
+        run: |
+          cd repo
+          apt-ftparchive release \
+            --architecture=amd64 \
+            --label="ScreenGuard APT Repository" \
+            --origin="ScreenGuard" \
+            --suite="apt" \
+            --codename="apt" \
+            --component="main" \
+            dists/apt \
+            > dists/apt/Release
+
+      - name: Sign Release
+        run: |
+          cd repo
+          # Binary signature
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            -abs -o dists/apt/Release.gpg dists/apt/Release
+          # InRelease (clearsign)
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            --clearsign -o dists/apt/InRelease dists/apt/Release
+          # Public key for users
+          gpg --batch --export --armor > repo/key.asc
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: repo
+          destination_dir: .
+          force_orphan: false
