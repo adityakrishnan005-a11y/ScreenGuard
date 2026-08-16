@@ -110,7 +110,8 @@ class DatabaseService {
     );
   }
 
-  static const _excludedAppsFilter = "app NOT IN ('unknown', 'com.example.screenguard', 'screenguard')";
+  static const _excludedAppsFilter =
+      "app NOT IN ('unknown', 'com.example.screenguard', 'screenguard') AND app NOT LIKE 'window:%'";
 
   int todayTotalMs() {
     final now = DateTime.now();

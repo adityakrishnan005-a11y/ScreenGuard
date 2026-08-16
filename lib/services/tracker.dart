@@ -77,7 +77,9 @@ class Tracker {
     if (app == 'unknown' ||
         app.isEmpty ||
         app == 'com.example.screenguard' ||
-        app == 'screenguard') {
+        app == 'screenguard' ||
+        app.startsWith('window:') ||
+        title == 'screenguard') {
       // Exclude screen locker, shell actor, unknown, or ScreenGuard itself.
       if (_currentId != null) {
         db.closeSession(_currentId!, now);
