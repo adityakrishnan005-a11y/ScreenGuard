@@ -46,3 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Private notes (not for repo)
+TODO.md
+PLAN.md
+docs/package_repos.md
+docs/reddit_launch.md
