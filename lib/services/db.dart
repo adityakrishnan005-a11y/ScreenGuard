@@ -71,6 +71,17 @@ class DatabaseService {
     db.execute(
         'CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);');
     db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_app ON sessions(app);');
+    _migrateCorruptedAppNames();
+  }
+
+  void _migrateCorruptedAppNames() {
+    try {
+      db.execute("UPDATE sessions SET app_name = 'Firefox' WHERE (app = 'org.mozilla.firefox' OR app = 'firefox') AND (app_name LIKE 'Open the Profile Manager%' OR app_name LIKE 'Open a New %' OR app_name IS NULL);");
+      db.execute("UPDATE sessions SET app_name = 'Chromium' WHERE (app = 'chromium-browser' OR app = 'chromium') AND (app_name LIKE 'Open a New %' OR app_name IS NULL);");
+      db.execute("UPDATE sessions SET app_name = 'Files' WHERE app LIKE '%nautilus%' AND (app_name = 'New Window' OR app_name IS NULL);");
+      db.execute("UPDATE sessions SET app_name = 'Terminal' WHERE app LIKE '%ptyxis%' AND (app_name = 'Preferences' OR app_name LIKE 'New %' OR app_name IS NULL);");
+      db.execute("UPDATE sessions SET app_name = 'Text Editor' WHERE app LIKE '%texteditor%' AND (app_name = 'New Window' OR app_name IS NULL);");
+    } catch (_) {}
   }
 
   int openSession({

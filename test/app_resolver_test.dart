@@ -3,46 +3,80 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:screenguard/services/app_resolver.dart';
 
 void main() {
-  test('built-in Electron override maps to friendly name', () {
-    final r = AppResolver();
-    expect(r.resolve('code').name, 'VS Code');
-    expect(r.resolve('code-insiders').name, 'VS Code Insiders');
-    expect(r.resolve('slack').name, 'Slack');
-    expect(r.resolve('discord').name, 'Discord');
-    expect(r.resolve('steam').name, 'Steam');
-    expect(r.resolve('telegram').name, 'Telegram');
-    expect(r.resolve('spotify').name, 'Spotify');
-  });
+  group('AppResolver', () {
+    late Directory tempDir;
+    late AppResolver resolver;
 
-  test('resolves .desktop Name via StartupWMClass', () {
-    final dir = Directory.systemTemp.createTempSync();
-    File('${dir.path}/myapp.desktop').writeAsStringSync('''
+    setUp(() {
+      tempDir = Directory.systemTemp.createTempSync('screenguard_resolver_test_');
+      resolver = AppResolver();
+    });
+
+    tearDown(() {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+
+    test('ignores [Desktop Action] sections and preserves main [Desktop Entry] Name', () {
+      final desktopFile = File('${tempDir.path}/org.mozilla.firefox.desktop');
+      desktopFile.writeAsStringSync('''
 [Desktop Entry]
-Name=My Cool App
-StartupWMClass=myapp
-Icon=myapp
-''');
-    final r = AppResolver();
-    r.scanDir(dir.path);
-    expect(r.resolve('myapp').name, 'My Cool App');
-    dir.deleteSync(recursive: true);
-  });
+Version=1.0
+Name=Firefox
+StartupWMClass=firefox
+Exec=firefox %u
+Actions=profile-manager-window;
 
-  test('falls back to desktop filename when no StartupWMClass', () {
-    final dir = Directory.systemTemp.createTempSync();
-    File('${dir.path}/firefox.desktop').writeAsStringSync('''
+[Desktop Action profile-manager-window]
+Name=Open the Profile Manager
+Exec=firefox --ProfileManager
+''');
+
+      resolver.scanDir(tempDir.path);
+
+      final byClass = resolver.resolve('firefox');
+      expect(byClass.name, 'Firefox');
+
+      final byBase = resolver.resolve('org.mozilla.firefox');
+      expect(byBase.name, 'Firefox');
+    });
+
+    test('correctly parses Chromium desktop actions without overwriting', () {
+      final desktopFile = File('${tempDir.path}/chromium-browser.desktop');
+      desktopFile.writeAsStringSync('''
 [Desktop Entry]
-Name=Firefox Web Browser
-''');
-    final r = AppResolver();
-    r.scanDir(dir.path);
-    expect(r.resolve('firefox').name, 'Firefox Web Browser');
-    dir.deleteSync(recursive: true);
-  });
+Name=Chromium Web Browser
+StartupWMClass=chromium-browser
+Exec=chromium-browser %U
+Actions=new-private-window;
 
-  test('fallback capitalizes the raw class', () {
-    final r = AppResolver();
-    expect(r.resolve('com.example.foo').name, 'Foo');
-    expect(r.resolve('unknown').name, 'Unknown');
+[Desktop Action new-private-window]
+Name=Open a New Private Window
+Exec=chromium-browser --incognito
+''');
+
+      resolver.scanDir(tempDir.path);
+
+      final byClass = resolver.resolve('chromium-browser');
+      expect(byClass.name, 'Chromium Web Browser');
+    });
+
+    test('built-in Electron override maps to friendly name', () {
+      final r = AppResolver();
+      expect(r.resolve('code').name, 'VS Code');
+      expect(r.resolve('code-insiders').name, 'VS Code Insiders');
+      expect(r.resolve('slack').name, 'Slack');
+      expect(r.resolve('discord').name, 'Discord');
+      expect(r.resolve('steam').name, 'Steam');
+      expect(r.resolve('telegram').name, 'Telegram');
+      expect(r.resolve('spotify').name, 'Spotify');
+    });
+
+    test('fallback capitalizes the raw class', () {
+      final r = AppResolver();
+      expect(r.resolve('com.example.foo').name, 'Foo');
+      expect(r.resolve('unknown').name, 'Unknown');
+    });
   });
 }
