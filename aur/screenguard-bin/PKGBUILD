@@ -2,14 +2,14 @@
 pkgname=screenguard-bin
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="ScreenGuard — Digital Wellbeing for Linux (Binary Release)"
+pkgdesc="ScreenGuard — Digital Wellbeing for Linux (Screen time tracking, daily app limits & focus mode)"
 arch=('x86_64')
-url="https://github.com/yourusername/screenguard"
-license=('MIT')
-depends=('xdotool' 'xorg-xprop' 'xprintidle' 'gtk3' 'sqlite' 'python' 'python-atspi')
+url="https://github.com/adityakrishnan005-a11y/ScreenGuard"
+license=('GPL-3.0-only')
+depends=('xdotool' 'xorg-xprop' 'gtk3' 'sqlite' 'gnome-shell')
 provides=('screenguard')
 conflicts=('screenguard' 'screenguard-git')
-source=("https://github.com/yourusername/screenguard/releases/download/v${pkgver}/screenguard-v${pkgver}-x86_64.tar.gz")
+source=("https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v${pkgver}/screenguard-${pkgver}-x86_64.tar.gz")
 sha256sums=('SKIP')
 
 package() {
@@ -22,5 +22,9 @@ package() {
 
   install -Dm644 "$srcdir/screenguard/linux/screenguard.service" "$pkgdir/usr/lib/systemd/user/screenguard.service"
   install -Dm644 "$srcdir/screenguard/linux/screenguard.desktop" "$pkgdir/usr/share/applications/screenguard.desktop"
-  install -Dm755 "$srcdir/screenguard/bin/active_window_helper.py" "$pkgdir/usr/share/screenguard/active_window_helper.py"
+
+  # GNOME Shell extension
+  install -d "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app"
+  install -Dm644 "$srcdir/screenguard/extension/metadata.json" "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json"
+  install -Dm755 "$srcdir/screenguard/extension/extension.js" "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/extension.js"
 }
