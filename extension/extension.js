@@ -42,20 +42,34 @@ export default class ScreenGuardExtension extends Extension {
             if (!win) {
                 return ['unknown', '', 0];
             }
-            
-            let app = win.get_wm_class() || win.get_gtk_application_id() || '';
-            
-            if (!app) {
-                const tracker = Shell.WindowTracker.get_default();
+
+            // Prefer Shell.WindowTracker — it resolves the *owning app* even for
+            // transient/modal windows like Firefox's "Profile Manager" popup that
+            // have an empty WM_CLASS. get_id() returns the .desktop app ID (e.g.
+            // "firefox.desktop") which is a stable identifier.
+            // IMPORTANT: never use appObj.get_name() — that returns the window
+            // title string, which is exactly the bug we are fixing.
+            let app = '';
+            const tracker = Shell.WindowTracker.get_default();
+            if (tracker) {
                 const appObj = tracker.get_window_app(win);
                 if (appObj) {
-                    app = appObj.get_id() || appObj.get_name() || '';
+                    app = appObj.get_id() || '';
+                    // get_id() returns e.g. "firefox.desktop" — strip the suffix.
+                    if (app.endsWith('.desktop')) {
+                        app = app.slice(0, -8);
+                    }
                 }
             }
-            
+
+            // Fallback: use WM_CLASS if the tracker gave us nothing.
+            if (!app) {
+                app = win.get_wm_class() || win.get_gtk_application_id() || '';
+            }
+
             const title = win.get_title() || '';
             const pid = win.get_pid() || 0;
-            
+
             return [app.toLowerCase(), title, pid];
         } catch (e) {
             console.error(`[ScreenGuard] Error in GetActiveWindow: ${e}`);
@@ -84,11 +98,22 @@ export default class ScreenGuardExtension extends Extension {
             for (const actor of actors) {
                 const win = actor.meta_window;
                 if (!win) continue;
-                let app = win.get_wm_class() || win.get_gtk_application_id() || '';
-                if (!app && tracker) {
+
+                // Same logic as GetActiveWindow: prefer tracker app ID.
+                let app = '';
+                if (tracker) {
                     const appObj = tracker.get_window_app(win);
-                    if (appObj) app = appObj.get_id() || appObj.get_name() || '';
+                    if (appObj) {
+                        app = appObj.get_id() || '';
+                        if (app.endsWith('.desktop')) {
+                            app = app.slice(0, -8);
+                        }
+                    }
                 }
+                if (!app) {
+                    app = win.get_wm_class() || win.get_gtk_application_id() || '';
+                }
+
                 const title = win.get_title() || '';
                 const pid = win.get_pid() || 0;
                 result.push([app.toLowerCase(), title, pid]);
