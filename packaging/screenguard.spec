@@ -1,66 +1,67 @@
 Name:           screenguard
 Version:        0.1.0
 Release:        1%{?dist}
-Summary:        Digital Wellbeing for Linux - Screen time tracking, daily app limits & focus mode
-License:        GPLv3
+Summary:        Digital Wellbeing for Linux — Screen Time Tracking, Daily App Limits & Focus Mode
+License:        GPL-3.0-or-later
 URL:            https://github.com/adityakrishnan005-a11y/ScreenGuard
-Source0:        %{url}/releases/download/v%{version}/screenguard-%{version}-x86_64.tar.gz
+ExclusiveArch:  x86_64
 
-BuildArch:      x86_64
-%global debug_package %{nil}
+BuildRequires:  systemd-rpm-macros
 Requires:       xdotool
+Requires:       xorg-x11-utils
+Requires:       python3
+Requires:       python3-pyatspi
 Requires:       gtk3
-Requires:       sqlite
-Requires:       gnome-shell
+Requires:       sqlite-libs
+
+%global debug_package %{nil}
 
 %description
-ScreenGuard is an open-source, local-first screen-time tracker and app-limit
-tool for Linux desktops. It provides per-app time tracking, a Flutter dashboard
-with daily/weekly breakdowns, daily app-limit lockouts, and a Focus/Pomodoro
-timer. Works on GNOME Wayland (via a bundled Shell extension) and X11.
+ScreenGuard is an open-source, privacy-first Digital Wellbeing application for Linux.
+It provides per-app daily screen time limits with lockout screens, an interactive
+weekly dashboard with 30-day history, and a Focus Mode / Pomodoro timer with
+automatic distraction app blocking. Data is stored 100%% locally in SQLite.
+Supports GNOME Wayland (via D-Bus Shell Extension) and all X11 desktops (EWMH).
 
 %prep
-%setup -q -c -n screenguard-build
+# Pre-built binaries are shipped directly from the release archive.
+# No compilation needed.
+
+%build
+# Nothing to build - binary release
 
 %install
-# Main bundle
-install -d %{buildroot}/opt/screenguard
-cp -r * %{buildroot}/opt/screenguard/
+# Install pre-built bundle from the release tarball located at dist/
+install -d %{buildroot}%{_prefix}/opt/screenguard
+cp -r %{_sourcedir}/bundle/* %{buildroot}%{_prefix}/opt/screenguard/
 
-# Binaries
-install -d %{buildroot}/usr/bin
-ln -s /opt/screenguard/screenguard %{buildroot}/usr/bin/screenguard
-ln -s /opt/screenguard/screenguard-daemon %{buildroot}/usr/bin/screenguard-daemon
+install -d %{buildroot}%{_bindir}
+ln -sf /opt/screenguard/screenguard %{buildroot}%{_bindir}/screenguard
+install -Dm755 %{_sourcedir}/bundle/screenguard-daemon %{buildroot}%{_bindir}/screenguard-daemon
 
-# Systemd user service
-install -Dm644 linux/screenguard.service %{buildroot}/usr/lib/systemd/user/screenguard.service
-
-# Desktop entry
-install -Dm644 linux/screenguard.desktop %{buildroot}/usr/share/applications/screenguard.desktop
-
-# GNOME Shell extension
-install -d %{buildroot}/usr/share/gnome-shell/extensions/screenguard@screenguard.app
-install -Dm644 extension/metadata.json %{buildroot}/usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json
-install -Dm755 extension/extension.js %{buildroot}/usr/share/gnome-shell/extensions/screenguard@screenguard.app/extension.js
+install -Dm644 %{_sourcedir}/screenguard.service %{buildroot}%{_userunitdir}/screenguard.service
+install -Dm644 %{_sourcedir}/screenguard.desktop %{buildroot}%{_datadir}/applications/screenguard.desktop
+install -Dm755 %{_sourcedir}/active_window_helper.py %{buildroot}%{_datadir}/screenguard/active_window_helper.py
 
 %files
 %license LICENSE
-%doc README.md
-/opt/screenguard
-/usr/bin/screenguard
-/usr/bin/screenguard-daemon
-/usr/lib/systemd/user/screenguard.service
-/usr/share/applications/screenguard.desktop
-/usr/share/gnome-shell/extensions/screenguard@screenguard.app/
+%{_prefix}/opt/screenguard/
+%{_bindir}/screenguard
+%{_bindir}/screenguard-daemon
+%{_userunitdir}/screenguard.service
+%{_datadir}/applications/screenguard.desktop
+%{_datadir}/screenguard/active_window_helper.py
 
 %post
-echo ""
-echo "ScreenGuard installed!"
-echo "  1. Enable the service: systemctl --user enable --now screenguard.service"
-echo "  2. Enable the GNOME extension (Extensions app or: gnome-extensions enable screenguard@screenguard.app)"
-echo "  3. Log out and back in for the extension to load."
-echo ""
+%systemd_user_post screenguard.service
+
+%preun
+%systemd_user_preun screenguard.service
 
 %changelog
-* Sat Aug 16 2025 Aditya Krishnan <aditya.krishnan005@gmail.com> - 0.1.0-1
-- Initial release
+* Sat Aug 16 2026 Aditya Krishnan <aditya.krishnan005@gmail.com> - 0.1.0-1
+- Initial release of ScreenGuard v0.1.0
+- Digital Wellbeing Dashboard with weekly charts and 30-day totals
+- Per-app daily time limits with lockout screen
+- Focus Mode Pomodoro timer with distraction blocker
+- GNOME Wayland (D-Bus Shell Extension) and X11 (EWMH) support
