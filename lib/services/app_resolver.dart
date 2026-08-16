@@ -46,7 +46,22 @@ class AppResolver {
       final content = f.readAsStringSync();
       String? wmClass, name, icon;
       final base = f.uri.pathSegments.last.replaceAll('.desktop', '').toLowerCase();
-      for (final line in content.split('\n')) {
+      bool inMainSection = false;
+
+      for (final rawLine in content.split('\n')) {
+        final line = rawLine.trim();
+        if (line.startsWith('[')) {
+          if (line == '[Desktop Entry]') {
+            inMainSection = true;
+          } else {
+            // Once we leave [Desktop Entry] (e.g. entering [Desktop Action ...]), stop parsing.
+            inMainSection = false;
+          }
+          continue;
+        }
+
+        if (!inMainSection) continue;
+
         if (line.startsWith('StartupWMClass=')) {
           wmClass = line.substring(15).trim().toLowerCase();
         } else if (line.startsWith('Name=')) {
