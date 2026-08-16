@@ -14,6 +14,8 @@ license: GPL-3.0
 contents:
   - src: build/linux/x64/release/bundle/
     dst: /opt/screenguard
+  - src: linux/resources/icon.png
+    dst: /usr/share/icons/hicolor/256x256/apps/screenguard.png
   - src: /opt/screenguard/screenguard
     dst: /usr/bin/screenguard
     type: symlink
