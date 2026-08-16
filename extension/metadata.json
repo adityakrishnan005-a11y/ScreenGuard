@@ -1,0 +1,6 @@
+{
+  "uuid": "screenguard@screenguard.app",
+  "name": "ScreenGuard Active Window Tracker",
+  "description": "Exposes active window info over D-Bus for ScreenGuard digital wellbeing",
+  "shell-version": [ "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50" ]
+}

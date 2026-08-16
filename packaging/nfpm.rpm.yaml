@@ -1,0 +1,41 @@
+name: screenguard
+arch: amd64
+platform: linux
+version: 0.1.0
+section: utils
+priority: optional
+maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
+description: |
+  ScreenGuard — Digital Wellbeing for Linux (Screen time tracking, daily app limits & focus mode).
+vendor: ScreenGuard
+homepage: https://example.com/screenguard
+license: GPL-3.0
+
+contents:
+  - src: build/linux/x64/release/bundle
+    dst: /opt/screenguard
+  - src: /opt/screenguard/screenguard
+    dst: /usr/bin/screenguard
+    type: symlink
+  - src: build/linux/x64/release/bundle/screenguard-daemon
+    dst: /usr/bin/screenguard-daemon
+  - src: linux/screenguard.service
+    dst: /usr/lib/systemd/user/screenguard.service
+  - src: linux/screenguard.desktop
+    dst: /usr/share/applications/screenguard.desktop
+  - src: bin/active_window_helper.py
+    dst: /usr/share/screenguard/active_window_helper.py
+  - src: tools/enable_fedora_a11y.sh
+    dst: /usr/share/screenguard/enable_fedora_a11y.sh
+  - src: extension/metadata.json
+    dst: /usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json
+  - src: extension/extension.js
+    dst: /usr/share/gnome-shell/extensions/screenguard@screenguard.app/extension.js
+
+scripts:
+  postinstall: tools/enable_fedora_a11y.sh
+
+depends:
+  - python3
+  - python3-pyatspi
+  - xdotool
