@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=ScreenGuard (Digital Wellbeing)
+Comment=ScreenGuard — Digital Wellbeing for Linux
+Exec=/usr/bin/screenguard
+Icon=screenguard
+Terminal=false
+Type=Application
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

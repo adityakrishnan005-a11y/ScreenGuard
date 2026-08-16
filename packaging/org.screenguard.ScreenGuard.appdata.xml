@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.screenguard.ScreenGuard</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>ScreenGuard</name>
+  <summary>Digital Wellbeing, Daily Time Limits &amp; Focus Mode for Linux</summary>
+  <description>
+    <p>
+      ScreenGuard brings active Android-style Digital Wellbeing, App Limit Lockouts, and Focus Mode Pomodoro Session Blocking directly to the Linux desktop.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Digital Wellbeing Dashboard with 30-day cumulative trends</li>
+      <li>Interactive 7-day bar chart with week-by-week history navigation</li>
+      <li>Daily App Limits with 90% warning alerts and 100% lockout screen</li>
+      <li>Focus Mode with animated Pomodoro countdown timer and distraction blocker</li>
+      <li>100% local, private SQLite storage</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">screenguard.desktop</launchable>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>ScreenGuard Digital Wellbeing Dashboard</caption>
+      <image type="source">https://raw.githubusercontent.com/adityakrishnan/screenguard/main/docs/assets/dashboard.png</image>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://github.com/adityakrishnan/screenguard</url>
+  <url type="bugtracker">https://github.com/adityakrishnan/screenguard/issues</url>
+
+  <developer_name>Aditya Krishnan</developer_name>
+
+  <releases>
+    <release version="0.1.0" date="2026-08-16"/>
+  </releases>
+
+  <content_rating type="oars-1.1"/>
+</component>
