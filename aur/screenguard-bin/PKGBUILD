@@ -1,0 +1,26 @@
+# Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
+pkgname=screenguard-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="ScreenGuard — Digital Wellbeing for Linux (Binary Release)"
+arch=('x86_64')
+url="https://github.com/yourusername/screenguard"
+license=('MIT')
+depends=('xdotool' 'xorg-xprop' 'xprintidle' 'gtk3' 'sqlite' 'python' 'python-atspi')
+provides=('screenguard')
+conflicts=('screenguard' 'screenguard-git')
+source=("https://github.com/yourusername/screenguard/releases/download/v${pkgver}/screenguard-v${pkgver}-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  install -d "$pkgdir/opt/screenguard"
+  cp -r "$srcdir/screenguard/"* "$pkgdir/opt/screenguard/"
+
+  install -d "$pkgdir/usr/bin"
+  ln -s /opt/screenguard/screenguard "$pkgdir/usr/bin/screenguard"
+  ln -s /opt/screenguard/screenguard-daemon "$pkgdir/usr/bin/screenguard-daemon"
+
+  install -Dm644 "$srcdir/screenguard/linux/screenguard.service" "$pkgdir/usr/lib/systemd/user/screenguard.service"
+  install -Dm644 "$srcdir/screenguard/linux/screenguard.desktop" "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm755 "$srcdir/screenguard/bin/active_window_helper.py" "$pkgdir/usr/share/screenguard/active_window_helper.py"
+}

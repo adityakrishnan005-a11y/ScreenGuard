@@ -1,0 +1,25 @@
+app-id: org.screenguard.ScreenGuard
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: screenguard
+
+finish-args:
+  - --socket=x11
+  - --socket=wayland
+  - --socket=session-bus
+  - --device=dri
+  - --filesystem=home
+
+modules:
+  - name: screenguard
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 screenguard /app/bin/screenguard
+      - install -Dm755 screenguard-daemon /app/bin/screenguard-daemon
+      - install -Dm644 linux/screenguard.desktop /app/share/applications/screenguard.desktop
+      - install -Dm644 packaging/org.screenguard.ScreenGuard.appdata.xml /app/share/metainfo/org.screenguard.ScreenGuard.appdata.xml
+    sources:
+      - type: archive
+        url: https://github.com/adityakrishnan/screenguard/releases/download/v0.1.0/screenguard-v0.1.0-x86_64.tar.gz
+        sha256: SKIP

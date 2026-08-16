@@ -1,0 +1,40 @@
+# Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
+pkgname=screenguard-git
+pkgver=0.1.0.r0.g1234567
+pkgrel=1
+pkgdesc="ScreenGuard — Digital Wellbeing for Linux (Git Source Release)"
+arch=('x86_64')
+url="https://github.com/yourusername/screenguard"
+license=('MIT')
+depends=('xdotool' 'xorg-xprop' 'xprintidle' 'gtk3' 'sqlite' 'python' 'python-atspi')
+makedepends=('git' 'flutter' 'dart')
+provides=('screenguard')
+conflicts=('screenguard' 'screenguard-bin')
+source=('git+https://github.com/yourusername/screenguard.git')
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/screenguard"
+  printf "0.1.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$srcdir/screenguard"
+  flutter pub get
+  flutter build linux --release
+  dart compile exe bin/daemon.dart -o build/linux/x64/release/bundle/screenguard-daemon
+}
+
+package() {
+  cd "$srcdir/screenguard"
+  install -d "$pkgdir/opt/screenguard"
+  cp -r build/linux/x64/release/bundle/* "$pkgdir/opt/screenguard/"
+
+  install -d "$pkgdir/usr/bin"
+  ln -s /opt/screenguard/screenguard "$pkgdir/usr/bin/screenguard"
+  ln -s /opt/screenguard/screenguard-daemon "$pkgdir/usr/bin/screenguard-daemon"
+
+  install -Dm644 linux/screenguard.service "$pkgdir/usr/lib/systemd/user/screenguard.service"
+  install -Dm644 linux/screenguard.desktop "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm755 bin/active_window_helper.py "$pkgdir/usr/share/screenguard/active_window_helper.py"
+}
