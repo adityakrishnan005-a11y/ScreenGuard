@@ -87,23 +87,45 @@ graph TD
 
 ## 📦 Installation
 
-Choose your Linux distribution below. Simply copy and paste the command into your terminal:
+Choose your Linux distribution below. Simply copy and paste the commands into your terminal.
 
-### 🐧 Ubuntu / Debian / Zorin OS / Linux Mint / Pop!_OS (`.deb`)
+### 🐧 Ubuntu / Debian / Zorin OS / Linux Mint / Pop!_OS
+
+**Option A — APT repository (recommended, receives updates):**
 ```bash
-wget https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v0.1.0/screenguard_0.1.0_amd64.deb && sudo apt update && sudo apt install ./screenguard_0.1.0_amd64.deb -y
+sudo wget -O /usr/share/keyrings/screenguard.asc https://adityakrishnan005-a11y.github.io/ScreenGuard/apt/key.asc
+echo "deb [signed-by=/usr/share/keyrings/screenguard.asc] https://adityakrishnan005-a11y.github.io/ScreenGuard/apt apt main" | sudo tee /etc/apt/sources.list.d/screenguard.list
+sudo apt update && sudo apt install screenguard
 ```
 
-### 🎩 Fedora / RHEL / Rocky Linux (`.rpm`)
+**Option B — standalone `.deb`:**
 ```bash
-sudo dnf install https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v0.1.0/screenguard-0.1.0-1.x86_64.rpm -y
+wget https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v0.1.0/screenguard_0.1.0_amd64.deb && sudo apt install ./screenguard_0.1.0_amd64.deb -y
 ```
 
-### 🏹 Arch Linux / Manjaro (`AUR`)
+### 🎩 Fedora / RHEL / Rocky Linux (Copr)
 ```bash
-yay -S screenguard-bin
-# or
-paru -S screenguard-bin
+sudo dnf copr enable the-amibivert/screenguard
+sudo dnf install screenguard
+```
+
+### 🏹 Arch Linux / Manjaro (custom repository)
+
+> The AUR package is coming soon (AUR account registration is temporarily suspended). Until then, use our signed custom repository:
+
+```bash
+# 1. Import & locally trust the signing key
+curl -fsSL https://adityakrishnan005-a11y.github.io/ScreenGuard/arch/key.asc -o /tmp/screenguard.asc
+sudo pacman-key --add /tmp/screenguard.asc
+sudo pacman-key --lsign-key 5E851C89E39A8FD573BF40EAEC671823CA28A37E
+
+# 2. Append the repository to /etc/pacman.conf:
+#    [screenguard]
+#    Server = https://adityakrishnan005-a11y.github.io/ScreenGuard/arch/$arch
+#    SigLevel = Required DatabaseRequired TrustedOnly
+
+# 3. Install
+sudo pacman -Sy && sudo pacman -S screenguard
 ```
 
 ---
