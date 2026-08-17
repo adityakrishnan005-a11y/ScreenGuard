@@ -1,5 +1,31 @@
+import 'dart:ffi';
 import 'dart:io';
+import 'package:sqlite3/open.dart';
 import 'package:sqlite3/sqlite3.dart';
+
+bool _sqliteInitialized = false;
+
+void _ensureSqliteLoaded() {
+  if (_sqliteInitialized) return;
+  _sqliteInitialized = true;
+  if (Platform.isLinux) {
+    open.overrideFor(OperatingSystem.linux, () {
+      final candidates = [
+        'libsqlite3.so.0',
+        'libsqlite3.so',
+        '/usr/lib64/libsqlite3.so.0',
+        '/usr/lib/x86_64-linux-gnu/libsqlite3.so.0',
+        '/usr/lib/libsqlite3.so.0',
+      ];
+      for (final name in candidates) {
+        try {
+          return DynamicLibrary.open(name);
+        } catch (_) {}
+      }
+      return DynamicLibrary.process();
+    });
+  }
+}
 
 class DatabaseService {
   late final Database db;
@@ -16,6 +42,7 @@ class DatabaseService {
   }
 
   void init({String? path}) {
+    _ensureSqliteLoaded();
     this.path = path ?? _resolvePath();
     db = sqlite3.open(this.path);
     db.execute('PRAGMA journal_mode=WAL;');
