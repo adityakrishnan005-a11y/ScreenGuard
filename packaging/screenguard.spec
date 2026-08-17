@@ -5,13 +5,8 @@ Summary:        Digital Wellbeing for Linux — Screen Time Tracking, Daily App 
 License:        GPL-3.0-or-later
 URL:            https://github.com/adityakrishnan005-a11y/ScreenGuard
 
-# Pre-built release bundle (Flutter + Dart daemon binary)
+# Pre-built release bundle (Flutter + Dart daemon binary + resources)
 Source0:        https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v%{version}/screenguard-%{version}-x86_64.tar.gz
-
-# Supporting files — pulled from git repo raw URLs
-Source1:        https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/main/linux/screenguard.service
-Source2:        https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/main/linux/screenguard.desktop
-Source3:        https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/main/bin/active_window_helper.py
 
 ExclusiveArch:  x86_64
 
@@ -35,8 +30,7 @@ automatic distraction app blocking. Data is stored 100%% locally in SQLite.
 Supports GNOME Wayland (via D-Bus Shell Extension) and all X11 desktops (EWMH).
 
 %prep
-mkdir -p bundle
-tar -xzf %{SOURCE0} -C bundle
+%setup -q -n screenguard
 
 %build
 # Nothing to build — binary release
@@ -44,31 +38,42 @@ tar -xzf %{SOURCE0} -C bundle
 %install
 # Main application bundle → /opt/screenguard
 install -d %{buildroot}/opt/screenguard
-cp -r bundle/* %{buildroot}/opt/screenguard/
+cp -a screenguard screenguard-daemon data lib %{buildroot}/opt/screenguard/
 
-# Symlink GUI binary into PATH
+# Symlinks in PATH
 install -d %{buildroot}%{_bindir}
 ln -sf /opt/screenguard/screenguard %{buildroot}%{_bindir}/screenguard
+ln -sf /opt/screenguard/screenguard-daemon %{buildroot}%{_bindir}/screenguard-daemon
 
-# Daemon binary
-install -Dm755 bundle/screenguard-daemon %{buildroot}%{_bindir}/screenguard-daemon
+# App icon
+install -Dm644 linux/resources/icon.png %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/screenguard.png
 
 # systemd user service
-install -Dm644 %{SOURCE1} %{buildroot}%{_userunitdir}/screenguard.service
+install -Dm644 linux/screenguard.service %{buildroot}%{_userunitdir}/screenguard.service
 
 # .desktop launcher
-install -Dm644 %{SOURCE2} %{buildroot}%{_datadir}/applications/screenguard.desktop
+install -Dm644 linux/screenguard.desktop %{buildroot}%{_datadir}/applications/screenguard.desktop
 
-# Active window helper script
-install -Dm755 %{SOURCE3} %{buildroot}%{_datadir}/screenguard/active_window_helper.py
+# Helper scripts
+install -Dm755 bin/active_window_helper.py %{buildroot}%{_datadir}/screenguard/active_window_helper.py
+install -Dm755 tools/enable_fedora_a11y.sh %{buildroot}%{_datadir}/screenguard/enable_fedora_a11y.sh
+
+# GNOME Shell extension
+install -d %{buildroot}%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app
+install -Dm644 extension/metadata.json %{buildroot}%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/metadata.json
+install -Dm755 extension/extension.js %{buildroot}%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/extension.js
 
 %files
+%license LICENSE
+%doc README.md
 /opt/screenguard/
 %{_bindir}/screenguard
 %{_bindir}/screenguard-daemon
 %{_userunitdir}/screenguard.service
 %{_datadir}/applications/screenguard.desktop
-%{_datadir}/screenguard/active_window_helper.py
+%{_datadir}/icons/hicolor/256x256/apps/screenguard.png
+%{_datadir}/screenguard/
+%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/
 
 %post
 %systemd_user_post screenguard.service
@@ -77,7 +82,7 @@ install -Dm755 %{SOURCE3} %{buildroot}%{_datadir}/screenguard/active_window_help
 %systemd_user_preun screenguard.service
 
 %changelog
-* Sat Aug 16 2026 Aditya Krishnan <aditya.krishnan005@gmail.com> - 0.1.0-1
+* Mon Aug 17 2026 Aditya Krishnan <aditya.krishnan005@gmail.com> - 0.1.0-1
 - Initial release of ScreenGuard v0.1.0
 - Digital Wellbeing Dashboard with weekly charts and 30-day totals
 - Per-app daily time limits with lockout screen
