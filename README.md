@@ -87,48 +87,46 @@ graph TD
 
 ## 📦 Installation
 
-### Arch Linux / Manjaro (AUR)
+Choose your Linux distribution below. Simply copy and paste the command into your terminal:
+
+### 🐧 Ubuntu / Debian / Zorin OS / Linux Mint / Pop!_OS (`.deb`)
+```bash
+wget https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v0.1.0/screenguard_0.1.0_amd64.deb && sudo apt update && sudo apt install ./screenguard_0.1.0_amd64.deb -y
+```
+
+### 🎩 Fedora / RHEL / Rocky Linux (`.rpm`)
+```bash
+sudo dnf install https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v0.1.0/screenguard-0.1.0-1.x86_64.rpm -y
+```
+
+### 🏹 Arch Linux / Manjaro (`AUR`)
 ```bash
 yay -S screenguard-bin
 # or
 paru -S screenguard-bin
-
-systemctl --user enable --now screenguard.service
-```
-
-### Fedora / RHEL / Rocky Linux (.rpm)
-```bash
-sudo dnf install ./dist/screenguard-0.1.0-1.x86_64.rpm
-systemctl --user enable --now screenguard.service
-```
-
-### Ubuntu / Debian / Pop!_OS / Linux Mint (.deb)
-```bash
-sudo apt install ./dist/screenguard_0.1.0_amd64.deb
-systemctl --user enable --now screenguard.service
 ```
 
 ---
 
-## 🛠️ Building from Source
+## 🛠️ Building from Source (Developers)
 
-### Prerequisites
-* Flutter SDK (3.x or higher)
-* Dart SDK
-* `clang`, `cmake`, `ninja-build`, `pkg-config`, `libgtk-3-dev`
-* `nfpm` (for packaging `.rpm` / `.deb`)
+If you prefer to clone the repository and build the binaries yourself:
 
-### Compile Release Binaries & Packages
 ```bash
-# 1. Build Linux Release GUI
+# 1. Clone the repository
+git clone https://github.com/adityakrishnan005-a11y/ScreenGuard.git
+cd ScreenGuard
+
+# 2. Install dependencies & build release bundle
+flutter pub get
 flutter build linux --release
 
-# 2. Compile Daemon Binary
+# 3. Compile the background tracking daemon
 dart compile exe bin/daemon.dart -o build/linux/x64/release/bundle/screenguard-daemon
 
-# 3. Create .rpm and .deb Packages
-nfpm package -f packaging/nfpm.rpm.yaml -t dist/screenguard-0.1.0-1.x86_64.rpm
+# 4. (Optional) Create .deb and .rpm packages
 nfpm package -f packaging/nfpm.deb.yaml -t dist/screenguard_0.1.0_amd64.deb
+nfpm package -f packaging/nfpm.rpm.yaml -t dist/screenguard-0.1.0-1.x86_64.rpm
 ```
 
 ---
