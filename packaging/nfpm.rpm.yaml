@@ -39,5 +39,5 @@ depends:
   - python3
   - python3-pyatspi
   - xdotool
-  - xorg-x11-utils
+  - xprop
   - sqlite-libs
