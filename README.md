@@ -130,6 +130,31 @@ sudo pacman -Sy && sudo pacman -S screenguard
 
 ---
 
+## 🚀 Getting Started
+
+1. **Launch ScreenGuard** from your applications menu (or run `screenguard` in a terminal).
+2. **Start the tracking daemon** (runs in the background and auto-starts on login):
+   ```bash
+   systemctl --user enable --now screenguard
+   systemctl --user status screenguard   # verify it is active
+   ```
+3. **GNOME Wayland — enable the Shell extension** so ScreenGuard can read the active window:
+   ```bash
+   gnome-extensions enable screenguard@screenguard.app
+   ```
+   - On **Debian/Ubuntu/Fedora** the package post-install step enables AT-SPI accessibility and copies the extension for you.
+   - On **Arch**, run `sudo /usr/share/screenguard/enable_fedora_a11y.sh` once, then enable the extension.
+4. Open the dashboard to set **daily app limits** and start a **Focus Mode** session.
+
+> 💡 **X11 sessions (KDE X11, XFCE, etc.)**: tracking works out-of-the-box via `xprop`/`xdotool` (install `xdotool`, `xorg-xprop`, and optionally `xprintidle` for idle detection). Native Wayland on non-GNOME compositors is not yet supported — use an X11 session there.
+
+### 🔒 Data & Privacy
+
+* All session data is stored **locally** in a SQLite database at `~/.local/share/screenguard/usage.db` (WAL mode).
+* No cloud sync, no accounts, no telemetry. Your screen-time data never leaves your machine.
+
+---
+
 ## 🛠️ Building from Source (Developers)
 
 If you prefer to clone the repository and build the binaries yourself:
@@ -163,6 +188,28 @@ We are actively working on expanding ScreenGuard! Here is what is currently plan
 - 📊 **Data Export**: Export your historical screen time data to CSV or JSON formats for custom analysis.
 - 📈 **Weekly Digest Reports**: Generate automated PDF or Markdown summaries of weekly productivity trends.
 - ⚙️ **Strict Mode**: Optional hard lockouts that prevent adding extra extension time once a daily limit is reached.
+
+---
+
+## ❓ FAQ
+
+**Tracking shows "unknown" on GNOME / Wayland?**
+Ensure the ScreenGuard GNOME Shell extension is enabled (`gnome-extensions enable screenguard@screenguard.app`) and toolkit-accessibility is on. For sandboxed **Flatpak** apps, AT-SPI access must be granted — the Debian/Ubuntu/Fedora post-install script does this automatically, but if you installed via a method that skips post-install (e.g. Arch) or use user Flatpaks, re-run `sudo /usr/share/screenguard/enable_fedora_a11y.sh`.
+
+**Nothing is tracked on KDE Plasma Wayland / Sway / Hyprland?**
+Native Wayland tracking is currently only available on **GNOME Wayland**. For KDE and other compositors, log into an **X11 session** (e.g. Plasma X11), where ScreenGuard tracks via `xprop`/`xdotool`.
+
+**The daemon isn't running.**
+Check `systemctl --user status screenguard`. If inactive, run `systemctl --user enable --now screenguard`. Note it requires an active graphical session (`graphical-session.target`), so it only starts once you're logged in.
+
+**How do I reset or move my data?**
+Stop the daemon (`systemctl --user stop screenguard`), then delete `~/.local/share/screenguard/usage.db*` and relaunch to start fresh.
+
+**How do I update ScreenGuard?**
+Use your package manager — APT, DNF (Copr), and the Arch repo all deliver updates. Or download the latest release asset from the [releases page](https://github.com/adityakrishnan005-a11y/ScreenGuard/releases).
+
+**Where do I report bugs?**
+Open a [GitHub Issue](https://github.com/adityakrishnan005-a11y/ScreenGuard/issues). For **X11** problems, please attach a screenshot/video and your desktop environment + version so we can reproduce it.
 
 ---
 
