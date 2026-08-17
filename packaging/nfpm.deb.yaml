@@ -12,7 +12,7 @@ homepage: https://example.com/screenguard
 license: GPL-3.0
 
 contents:
-  - src: build/linux/x64/release/bundle
+  - src: build/linux/x64/release/bundle/
     dst: /opt/screenguard
   - src: /opt/screenguard/screenguard
     dst: /usr/bin/screenguard
