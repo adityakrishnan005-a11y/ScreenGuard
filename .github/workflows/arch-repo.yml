@@ -40,7 +40,7 @@ jobs:
       - name: Sign package
         run: |
           cd packaging
-          PKG=$(ls screenguard-*.pkg.tar.zst)
+          PKG=$(ls screenguard-*.pkg.tar.zst | grep -v -- '-debug-')
           gpg --batch --yes --pinentry-mode loopback \
             --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
             -abs -o "$PKG.sig" "$PKG"
