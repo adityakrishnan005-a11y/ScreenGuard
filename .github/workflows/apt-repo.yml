@@ -36,13 +36,7 @@ jobs:
       - name: Generate Packages
         run: |
           cd repo
-          apt-ftparchive \
-            --architecture=amd64 \
-            --md5 \
-            --sha1 \
-            --sha256 \
-            --sha512 \
-            contents dists/apt/main/binary-amd64/ \
+          apt-ftparchive packages dists/apt/main/binary-amd64 \
             > dists/apt/main/binary-amd64/Packages
           gzip -k -f dists/apt/main/binary-amd64/Packages
 
@@ -50,12 +44,12 @@ jobs:
         run: |
           cd repo
           apt-ftparchive release \
-            --architecture=amd64 \
-            --label="ScreenGuard APT Repository" \
-            --origin="ScreenGuard" \
-            --suite="apt" \
-            --codename="apt" \
-            --component="main" \
+            -o APT::FTPArchive::Release::Origin="ScreenGuard" \
+            -o APT::FTPArchive::Release::Label="ScreenGuard APT Repository" \
+            -o APT::FTPArchive::Release::Suite="apt" \
+            -o APT::FTPArchive::Release::Codename="apt" \
+            -o APT::FTPArchive::Release::Architectures="amd64" \
+            -o APT::FTPArchive::Release::Components="main" \
             dists/apt \
             > dists/apt/Release
 
