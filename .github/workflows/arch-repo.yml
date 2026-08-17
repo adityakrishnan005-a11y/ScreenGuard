@@ -15,7 +15,7 @@ jobs:
       image: archlinux:latest
     steps:
       - name: Install build tooling
-        run: pacman -Syu --noconfirm base-devel git
+        run: pacman -Sy --noconfirm base-devel git
 
       - uses: actions/checkout@v4
 
