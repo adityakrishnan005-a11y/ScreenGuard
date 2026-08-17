@@ -7,6 +7,7 @@ arch=('x86_64')
 url="https://github.com/adityakrishnan005-a11y/ScreenGuard"
 license=('GPL-3.0-only')
 depends=('xdotool' 'xorg-xprop' 'gtk3' 'sqlite')
+options=(!debug)
 optdepends=(
   'xprintidle: idle-time detection on X11 (required for KDE/X11 sessions)'
   'gnome-shell: GNOME Shell extension support (primary Wayland backend)'
