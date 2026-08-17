@@ -16,7 +16,7 @@ optdepends=(
 provides=('screenguard')
 conflicts=('screenguard-git')
 source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/$pkgname-$pkgver-x86_64.tar.gz"
-        "../linux/resources/icon.png")
+        "icon.png")
 sha256sums=('dd5c71f274a0de0b9f8d45db6386d47a050eb19ad65169dfa490ac963e5797a3'
             'SKIP')
 
