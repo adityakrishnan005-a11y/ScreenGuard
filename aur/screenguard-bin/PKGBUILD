@@ -15,14 +15,18 @@ optdepends=(
 )
 provides=('screenguard')
 conflicts=('screenguard' 'screenguard-git')
-source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/screenguard-$pkgver-x86_64.tar.gz")
-sha256sums=('dd5c71f274a0de0b9f8d45db6386d47a050eb19ad65169dfa490ac963e5797a3')
+source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/screenguard-$pkgver-x86_64.tar.gz"
+        "../linux/resources/icon.png")
+sha256sums=('dd5c71f274a0de0b9f8d45db6386d47a050eb19ad65169dfa490ac963e5797a3'
+            'SKIP')
 
 package() {
   cd "$srcdir/screenguard"
 
   install -d "$pkgdir/opt/screenguard"
   cp -a screenguard screenguard-daemon data lib "$pkgdir/opt/screenguard/"
+
+  install -Dm644 "$srcdir/icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/screenguard.png"
 
   install -d "$pkgdir/usr/bin"
   ln -s /opt/screenguard/screenguard "$pkgdir/usr/bin/screenguard"
