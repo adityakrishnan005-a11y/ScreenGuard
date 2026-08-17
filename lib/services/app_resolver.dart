@@ -43,40 +43,83 @@ class AppResolver {
     if (!d.existsSync()) return;
     for (final f in d.listSync()) {
       if (f is! File || !f.path.endsWith('.desktop')) continue;
-      final content = f.readAsStringSync();
-      String? wmClass, name, icon;
-      final base = f.uri.pathSegments.last.replaceAll('.desktop', '').toLowerCase();
-      bool inMainSection = false;
+      _parseDesktop(f, addToCache: true);
+    }
+  }
 
-      for (final rawLine in content.split('\n')) {
-        final line = rawLine.trim();
-        if (line.startsWith('[')) {
-          if (line == '[Desktop Entry]') {
-            inMainSection = true;
-          } else {
-            // Once we leave [Desktop Entry] (e.g. entering [Desktop Action ...]), stop parsing.
-            inMainSection = false;
-          }
-          continue;
-        }
-
-        if (!inMainSection) continue;
-
-        if (line.startsWith('StartupWMClass=')) {
-          wmClass = line.substring(15).trim().toLowerCase();
-        } else if (line.startsWith('Name=')) {
-          name = line.substring(5).trim();
-        } else if (line.startsWith('Icon=')) {
-          icon = line.substring(5).trim();
-        }
-      }
-      if (name != null) {
-        if (wmClass != null && wmClass.isNotEmpty) {
-          _cache[wmClass] = AppMeta(name, icon);
-        }
-        _cache[base] = AppMeta(name, icon);
+  /// Returns all user-visible installed applications from .desktop dirs.
+  /// Each entry has keys: 'app' (lowercase desktop id), 'name', 'icon'.
+  List<Map<String, String>> listAllApps() {
+    final dirs = [
+      '/usr/share/applications',
+      '${Platform.environment['HOME'] ?? ''}/.local/share/applications',
+      '${Platform.environment['HOME'] ?? ''}/.local/share/flatpak/exports/share/applications',
+      '/var/lib/flatpak/exports/share/applications',
+    ];
+    final seen = <String>{};
+    final result = <Map<String, String>>[];
+    for (final dirPath in dirs) {
+      final d = Directory(dirPath);
+      if (!d.existsSync()) continue;
+      for (final f in d.listSync()) {
+        if (f is! File || !f.path.endsWith('.desktop')) continue;
+        final base = f.uri.pathSegments.last.replaceAll('.desktop', '').toLowerCase();
+        if (seen.contains(base)) continue;
+        final entry = _parseDesktop(f, addToCache: false);
+        if (entry == null) continue;
+        seen.add(base);
+        result.add({'app': base, 'name': entry.name, 'icon': entry.icon ?? ''});
       }
     }
+    result.sort((a, b) => a['name']!.toLowerCase().compareTo(b['name']!.toLowerCase()));
+    return result;
+  }
+
+  AppMeta? _parseDesktop(File f, {required bool addToCache}) {
+    final content = f.readAsStringSync();
+    String? wmClass, name, icon;
+    final base = f.uri.pathSegments.last.replaceAll('.desktop', '').toLowerCase();
+    bool inMainSection = false;
+    bool skip = false;
+
+    for (final rawLine in content.split('\n')) {
+      final line = rawLine.trim();
+      if (line.startsWith('[')) {
+        if (line == '[Desktop Entry]') {
+          inMainSection = true;
+        } else {
+          // Once we leave [Desktop Entry] (e.g. entering [Desktop Action ...]), stop parsing.
+          inMainSection = false;
+        }
+        continue;
+      }
+
+      if (!inMainSection) continue;
+
+      if (line.startsWith('StartupWMClass=')) {
+        wmClass = line.substring(15).trim().toLowerCase();
+      } else if (line.startsWith('Name=') && name == null) {
+        name = line.substring(5).trim();
+      } else if (line.startsWith('Icon=')) {
+        icon = line.substring(5).trim();
+      } else if (line == 'NoDisplay=true' || line == 'Hidden=true') {
+        skip = true;
+        break;
+      } else if (line.startsWith('Type=') && line != 'Type=Application') {
+        skip = true;
+        break;
+      }
+    }
+
+    if (skip || name == null) return null;
+    final meta = AppMeta(name, icon);
+    if (addToCache) {
+      if (wmClass != null && wmClass.isNotEmpty) {
+        _cache[wmClass] = meta;
+      }
+      _cache[base] = meta;
+    }
+    return meta;
   }
 
   AppMeta resolve(String rawClass) {
