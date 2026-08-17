@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="ScreenGuard — Digital Wellbeing for Linux" width="100%">
+</p>
+
 # ScreenGuard — Digital Wellbeing for Linux 🛡️
 > Modern Screen Time Tracking, Daily App Limits & Focus Mode for Wayland & X11.
 
