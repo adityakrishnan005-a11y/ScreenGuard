@@ -17,7 +17,7 @@ ExclusiveArch:  x86_64
 
 BuildRequires:  systemd-rpm-macros
 Requires:       xdotool
-Requires:       xorg-x11-utils
+Requires:       xprop
 Requires:       python3
 Requires:       python3-pyatspi
 Requires:       gtk3
