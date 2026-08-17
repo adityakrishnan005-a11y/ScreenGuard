@@ -72,7 +72,7 @@ jobs:
             --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
             --clearsign -o dists/apt/InRelease dists/apt/Release
           # Public key for users
-          gpg --batch --export --armor > repo/key.asc
+          gpg --batch --export --armor > key.asc
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
