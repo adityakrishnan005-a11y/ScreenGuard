@@ -1,0 +1,17 @@
+Package: screenguard
+Architecture: amd64
+Version: 0.1.0
+Priority: optional
+Section: utils
+Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
+Installed-Size: 39031
+Depends: xdotool, x11-utils, xprintidle, python3, python3-pyatspi, libsqlite3-0
+Filename: dists/apt/main/binary-amd64/screenguard_0.1.0_amd64.deb
+Size: 16457674
+MD5sum: 10a6d0844afd0aad768d76d2b2daa2bd
+SHA1: 88d92d1f9dc6f1d46ea49ae1d5fa87e71c52d442
+SHA256: 9845f6ea878b9132c441841bbb183875df6cb3d25f66eacb5e0b0d4496cf2235
+SHA512: 1369492ff150ecd1faddd51780f57ef939314ec2d106a7199d22cdccb863e6fe66a3de52ef789837550436965afb0a285926372533c36848e2d02a765ea7f4b3
+Homepage: https://example.com/screenguard
+Description: ScreenGuard — Digital Wellbeing for Linux (Screen time tracking, daily app limits & focus mode).
+

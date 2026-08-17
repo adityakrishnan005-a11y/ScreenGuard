@@ -1,0 +1,23 @@
+Architectures: amd64
+Codename: apt
+Components: main
+Date: Mon, 17 Aug 2026 16:52:42 +0000
+Label: ScreenGuard APT Repository
+Origin: ScreenGuard
+Suite: apt
+MD5Sum:
+ edef5a02956edc42a9521e5c2dfc790b              155 Release
+ 8fdbce386172ecd96143453e9eabbab3              785 main/binary-amd64/Packages
+ 297e05049515560804539e20394464af              570 main/binary-amd64/Packages.gz
+SHA1:
+ 6729ba4b4ad0338fcd6701722bc1151660123376              155 Release
+ f7288158664e8ecab875f4618ad27794d3ae5937              785 main/binary-amd64/Packages
+ 9e0780bbbb71bc7928d80ebf245e908894e8986b              570 main/binary-amd64/Packages.gz
+SHA256:
+ 9aec0bb05a9b01fda38985ad0d01af55bfa5263b4cdb984b3c38e3ff9293c0f1              155 Release
+ 71b887cd0717a3fbaf7ddf41ca7890e14258814eff20ecbf08f1731f6763ae68              785 main/binary-amd64/Packages
+ 572bd04a391a9c7e1d144f7449ac635624736db5533fff4a84ae797eb6f263c8              570 main/binary-amd64/Packages.gz
+SHA512:
+ a830ecb7a13f77d5a9727d4e2268e6c945ba2f40173edb485f6a90445c346436ecbd1bd3f1f3f9fe97817cd90ca0afab00fe5ee2276f068a2c8f9859d51d4491              155 Release
+ 98ff58b71769d10b57ef5613f22d85755b49c03228d37f13252ef9faed0b1e5650467786a7a570b7a0e56a06d6b2be4d5fec37f9b6878ffb3574c0212dac8cd1              785 main/binary-amd64/Packages
+ 74072b2f9647e80075d4686edb661ebde681e747f899b8d8ae2587c078ab383b68af93fac78e88f72d2b2e89157daef3eb3ec5eed7b878ae57e8b1e729d36c71              570 main/binary-amd64/Packages.gz
