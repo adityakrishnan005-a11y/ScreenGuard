@@ -37,6 +37,18 @@ jobs:
           cd packaging
           su builder -c "makepkg --noconfirm"
 
+      - name: Debug daemon shas
+        run: |
+          cd packaging
+          echo "=== downloaded source tarball ==="
+          sha256sum screenguard-0.1.0-x86_64.tar.gz
+          echo "=== extracted source dir ==="
+          ls -la src/screenguard/screenguard-daemon
+          sha256sum src/screenguard/screenguard-daemon
+          echo "=== packaged daemon (from pkg) ==="
+          test -f screenguard-0.1.0-1-x86_64.pkg.tar.zst && \
+            bsdtar -xf screenguard-0.1.0-1-x86_64.pkg.tar.zst -O opt/screenguard/screenguard-daemon | sha256sum
+
       - name: Sign package
         run: |
           cd packaging
