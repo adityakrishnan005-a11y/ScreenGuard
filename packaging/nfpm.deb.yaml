@@ -41,3 +41,4 @@ depends:
   - xprintidle
   - python3
   - python3-pyatspi
+  - libsqlite3-0
