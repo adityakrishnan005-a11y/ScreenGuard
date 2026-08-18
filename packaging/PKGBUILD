@@ -6,10 +6,9 @@ pkgdesc="Screen time tracker for Linux (Flutter GUI + Dart daemon)"
 arch=('x86_64')
 url="https://github.com/adityakrishnan005-a11y/ScreenGuard"
 license=('GPL-3.0-only')
-depends=('xdotool' 'xorg-xprop' 'gtk3' 'sqlite')
+depends=('xdotool' 'xorg-xprop' 'gtk3' 'sqlite' 'xprintidle')
 options=(!debug !strip)
 optdepends=(
-  'xprintidle: idle-time detection on X11 (required for KDE/X11 sessions)'
   'gnome-shell: GNOME Shell extension support (primary Wayland backend)'
   'python: active window helper script'
 )
