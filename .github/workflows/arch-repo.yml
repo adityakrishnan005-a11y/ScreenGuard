@@ -31,7 +31,7 @@ jobs:
 
       - name: Build package
         run: |
-          pacman -S --noconfirm xdotool xorg-xprop gtk3 sqlite
+          pacman -S --noconfirm xdotool xorg-xprop gtk3 sqlite xprintidle
           useradd -m builder
           chown -R builder:builder .
           cd packaging
