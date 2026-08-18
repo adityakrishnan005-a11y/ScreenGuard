@@ -54,7 +54,17 @@ jobs:
           gpg --batch --yes --pinentry-mode loopback \
             --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
             -abs -o screenguard.db.tar.zst.sig screenguard.db.tar.zst
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            -abs -o screenguard.db.sig screenguard.db
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            -abs -o screenguard.files.tar.zst.sig screenguard.files.tar.zst
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            -abs -o screenguard.files.sig screenguard.files
           gpg --batch --export --armor > ../key.asc
+          cp ../key.asc key.asc
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
