@@ -22,6 +22,9 @@ class FakeBackend implements WindowBackend {
 
   @override
   Future<bool> minimizeActiveWindow() async => true;
+
+  @override
+  Future<bool> closeActiveWindow() async => true;
 }
 
 void main() {

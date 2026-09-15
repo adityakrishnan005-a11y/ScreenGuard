@@ -74,4 +74,46 @@ void main() {
     expect(hist.length, 1);
     db.close();
   });
+
+  test('getDailyGoalMs defaults to 0 and persists custom goal', () {
+    final db = _tempDb();
+    expect(db.getDailyGoalMs(), 0);
+    db.setDailyGoalMs(4 * 3600 * 1000);
+    expect(db.getDailyGoalMs(), 4 * 3600 * 1000);
+    db.setDailyGoalMs(0);
+    expect(db.getDailyGoalMs(), 0);
+    db.close();
+  });
+
+  test('notification and sound settings persistence', () {
+    final db = _tempDb();
+    // Default values
+    expect(db.isNotificationsGloballyEnabled(), true);
+    expect(db.isSoundGloballyEnabled(), true);
+    expect(db.getSoundTheme(), 'chime');
+    expect(db.getCustomSoundPath(), '');
+    expect(db.isEventNotificationEnabled('daily_goal_50'), true);
+    expect(db.isEventSoundEnabled('daily_goal_50'), true);
+
+    // Modify settings
+    db.setNotificationsGloballyEnabled(false);
+    expect(db.isNotificationsGloballyEnabled(), false);
+
+    db.setSoundGloballyEnabled(false);
+    expect(db.isSoundGloballyEnabled(), false);
+
+    db.setSoundTheme('custom');
+    expect(db.getSoundTheme(), 'custom');
+
+    db.setCustomSoundPath('/home/user/sound.ogg');
+    expect(db.getCustomSoundPath(), '/home/user/sound.ogg');
+
+    db.setEventNotificationEnabled('daily_goal_50', false);
+    expect(db.isEventNotificationEnabled('daily_goal_50'), false);
+
+    db.setEventSoundEnabled('daily_goal_50', false);
+    expect(db.isEventSoundEnabled('daily_goal_50'), false);
+
+    db.close();
+  });
 }

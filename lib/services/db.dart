@@ -92,9 +92,29 @@ class DatabaseService {
       CREATE TABLE IF NOT EXISTS active_focus_state (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         end_time_ms INTEGER NOT NULL,
-        duration_minutes INTEGER NOT NULL
+        duration_minutes INTEGER NOT NULL,
+        is_paused INTEGER DEFAULT 0,
+        remaining_seconds INTEGER DEFAULT 0
       );
     ''');
+    try {
+      db.execute('ALTER TABLE active_focus_state ADD COLUMN is_paused INTEGER DEFAULT 0;');
+    } catch (_) {}
+    try {
+      db.execute('ALTER TABLE active_focus_state ADD COLUMN remaining_seconds INTEGER DEFAULT 0;');
+    } catch (_) {}
+    try {
+      db.execute('ALTER TABLE active_focus_state ADD COLUMN current_cycle INTEGER DEFAULT 1;');
+    } catch (_) {}
+    try {
+      db.execute('ALTER TABLE active_focus_state ADD COLUMN total_cycles INTEGER DEFAULT 1;');
+    } catch (_) {}
+    try {
+      db.execute('ALTER TABLE active_focus_state ADD COLUMN is_break INTEGER DEFAULT 0;');
+    } catch (_) {}
+    try {
+      db.execute('ALTER TABLE active_focus_state ADD COLUMN break_duration_minutes INTEGER DEFAULT 5;');
+    } catch (_) {}
     db.execute(
         'CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);');
     db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_app ON sessions(app);');
@@ -245,12 +265,19 @@ class DatabaseService {
     return rows.isNotEmpty;
   }
 
-  void startFocusSession(int durationMinutes) {
+  void startFocusSession(int durationMinutes, {int? totalCycles, int? breakMinutes}) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final endTime = now + (durationMinutes * 60 * 1000);
+    final remainingSec = durationMinutes * 60;
+    final cycles = totalCycles ?? (isPomodoroLoopEnabled() ? getPomodoroCyclesCount() : 1);
+    final brkMins = breakMinutes ?? getPomodoroBreakMinutes();
+
     db.execute(
-      'INSERT INTO active_focus_state (id, end_time_ms, duration_minutes) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET end_time_ms = ?, duration_minutes = ?;',
-      [endTime, durationMinutes, endTime, durationMinutes],
+      'INSERT INTO active_focus_state (id, end_time_ms, duration_minutes, is_paused, remaining_seconds, current_cycle, total_cycles, is_break, break_duration_minutes) VALUES (1, ?, ?, 0, ?, 1, ?, 0, ?) ON CONFLICT(id) DO UPDATE SET end_time_ms = ?, duration_minutes = ?, is_paused = 0, remaining_seconds = ?, current_cycle = 1, total_cycles = ?, is_break = 0, break_duration_minutes = ?;',
+      [
+        endTime, durationMinutes, remainingSec, cycles, brkMins,
+        endTime, durationMinutes, remainingSec, cycles, brkMins
+      ],
     );
     db.execute(
       'INSERT INTO focus_sessions (started_at, duration_minutes, completed) VALUES (?, ?, 0)',
@@ -258,19 +285,96 @@ class DatabaseService {
     );
   }
 
+  void pauseFocusSession() {
+    final state = getActiveFocusState();
+    if (state == null || (state['is_paused'] as int? ?? 0) == 1) return;
+    final endTime = state['end_time_ms'] as int;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final remainingSec = ((endTime - now) / 1000).ceil().clamp(0, 999999);
+    db.execute(
+      'UPDATE active_focus_state SET is_paused = 1, remaining_seconds = ? WHERE id = 1;',
+      [remainingSec],
+    );
+  }
+
+  void resumeFocusSession() {
+    final rows = db.select('SELECT * FROM active_focus_state WHERE id = 1');
+    if (rows.isEmpty) return;
+    final state = rows.first.cast<String, dynamic>();
+    if ((state['is_paused'] as int? ?? 0) == 0) return;
+    final isBreak = (state['is_break'] as int? ?? 0) == 1;
+    final fallbackMins = isBreak
+        ? (state['break_duration_minutes'] as int? ?? 5)
+        : (state['duration_minutes'] as int? ?? 25);
+    final remainingSec = (state['remaining_seconds'] as int?) ?? (fallbackMins * 60);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final newEndTime = now + (remainingSec * 1000);
+    db.execute(
+      'UPDATE active_focus_state SET is_paused = 0, end_time_ms = ? WHERE id = 1;',
+      [newEndTime],
+    );
+  }
+
   Map<String, dynamic>? getActiveFocusState() {
     final rows = db.select('SELECT * FROM active_focus_state WHERE id = 1');
     if (rows.isEmpty) return null;
     final state = rows.first.cast<String, dynamic>();
+    final isPaused = (state['is_paused'] as int? ?? 0) == 1;
+    if (isPaused) {
+      return state;
+    }
     final endTime = state['end_time_ms'] as int;
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now >= endTime) {
-      db.execute('DELETE FROM active_focus_state WHERE id = 1');
-      db.execute(
-        "UPDATE focus_sessions SET ended_at = ?, completed = 1 WHERE ended_at IS NULL AND duration_minutes = ?",
-        [endTime, state['duration_minutes']],
-      );
-      return null;
+      final isBreak = (state['is_break'] as int? ?? 0) == 1;
+      final currentCycle = (state['current_cycle'] as int? ?? 1);
+      final totalCycles = (state['total_cycles'] as int? ?? 1);
+      final workDurationMins = state['duration_minutes'] as int;
+      final breakMins = state['break_duration_minutes'] as int? ?? 5;
+
+      if (!isBreak) {
+        // Focus phase completed
+        db.execute(
+          "UPDATE focus_sessions SET ended_at = ?, completed = 1 WHERE ended_at IS NULL AND duration_minutes = ?",
+          [endTime, workDurationMins],
+        );
+
+        if (currentCycle < totalCycles && breakMins > 0) {
+          // Transition to Break phase
+          final breakEndMs = now + (breakMins * 60 * 1000);
+          final breakSec = breakMins * 60;
+          db.execute(
+            'UPDATE active_focus_state SET is_break = 1, end_time_ms = ?, remaining_seconds = ? WHERE id = 1;',
+            [breakEndMs, breakSec],
+          );
+          final updated = db.select('SELECT * FROM active_focus_state WHERE id = 1');
+          return updated.first.cast<String, dynamic>();
+        } else {
+          // All cycles completed
+          db.execute('DELETE FROM active_focus_state WHERE id = 1');
+          return null;
+        }
+      } else {
+        // Break phase completed -> transition to next Focus cycle
+        final nextCycle = currentCycle + 1;
+        if (nextCycle <= totalCycles) {
+          final nextWorkEndMs = now + (workDurationMins * 60 * 1000);
+          final nextWorkSec = workDurationMins * 60;
+          db.execute(
+            'UPDATE active_focus_state SET is_break = 0, current_cycle = ?, end_time_ms = ?, remaining_seconds = ? WHERE id = 1;',
+            [nextCycle, nextWorkEndMs, nextWorkSec],
+          );
+          db.execute(
+            'INSERT INTO focus_sessions (started_at, duration_minutes, completed) VALUES (?, ?, 0)',
+            [now, workDurationMins],
+          );
+          final updated = db.select('SELECT * FROM active_focus_state WHERE id = 1');
+          return updated.first.cast<String, dynamic>();
+        } else {
+          db.execute('DELETE FROM active_focus_state WHERE id = 1');
+          return null;
+        }
+      }
     }
     return state;
   }
@@ -353,6 +457,114 @@ class DatabaseService {
       [start],
     );
     return rows.first['t'] as int;
+  }
+
+  int getDailyGoalMs() {
+    final rows = db.select('SELECT value FROM settings WHERE key = ?;', ['daily_goal_ms']);
+    if (rows.isEmpty || rows.first['value'] == null) {
+      return 0;
+    }
+    return int.tryParse(rows.first['value'].toString()) ?? 0;
+  }
+
+  void setDailyGoalMs(int goalMs) {
+    if (goalMs <= 0) {
+      db.execute('DELETE FROM settings WHERE key = ?;', ['daily_goal_ms']);
+    } else {
+      db.execute(
+        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;',
+        ['daily_goal_ms', goalMs.toString()],
+      );
+    }
+  }
+
+  String getSetting(String key, {String defaultValue = ''}) {
+    final rows = db.select('SELECT value FROM settings WHERE key = ?;', [key]);
+    if (rows.isEmpty || rows.first['value'] == null) {
+      return defaultValue;
+    }
+    return rows.first['value'].toString();
+  }
+
+  void setSetting(String key, String value) {
+    db.execute(
+      'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;',
+      [key, value],
+    );
+  }
+
+  bool isNotificationsGloballyEnabled() {
+    return getSetting('notifications_enabled', defaultValue: '1') == '1';
+  }
+
+  void setNotificationsGloballyEnabled(bool enabled) {
+    setSetting('notifications_enabled', enabled ? '1' : '0');
+  }
+
+  bool isSoundGloballyEnabled() {
+    return getSetting('sound_enabled', defaultValue: '1') == '1';
+  }
+
+  void setSoundGloballyEnabled(bool enabled) {
+    setSetting('sound_enabled', enabled ? '1' : '0');
+  }
+
+  String getSoundTheme() {
+    return getSetting('sound_theme', defaultValue: 'chime');
+  }
+
+  void setSoundTheme(String theme) {
+    setSetting('sound_theme', theme);
+  }
+
+  String getCustomSoundPath() {
+    return getSetting('custom_sound_path', defaultValue: '');
+  }
+
+  void setCustomSoundPath(String path) {
+    setSetting('custom_sound_path', path);
+  }
+
+  bool isEventNotificationEnabled(String eventKey) {
+    return getSetting('notify_$eventKey', defaultValue: '1') == '1';
+  }
+
+  void setEventNotificationEnabled(String eventKey, bool enabled) {
+    setSetting('notify_$eventKey', enabled ? '1' : '0');
+  }
+
+  bool isEventSoundEnabled(String eventKey) {
+    return getSetting('sound_$eventKey', defaultValue: '1') == '1';
+  }
+
+  void setEventSoundEnabled(String eventKey, bool enabled) {
+    setSetting('sound_$eventKey', enabled ? '1' : '0');
+  }
+
+  bool isPomodoroLoopEnabled() {
+    return getSetting('pomodoro_loop_enabled', defaultValue: '0') == '1';
+  }
+
+  void setPomodoroLoopEnabled(bool enabled) {
+    setSetting('pomodoro_loop_enabled', enabled ? '1' : '0');
+  }
+
+  int getPomodoroCyclesCount() {
+    final val = getSetting('pomodoro_cycles_count', defaultValue: '4');
+    return int.tryParse(val) ?? 4;
+  }
+
+  void setPomodoroCyclesCount(int count) {
+    setSetting('pomodoro_cycles_count', count.clamp(1, 20).toString());
+  }
+
+  int getPomodoroBreakMinutes() {
+    final val = getSetting('pomodoro_break_minutes', defaultValue: '5');
+    return int.tryParse(val) ?? 5;
+  }
+
+  void setPomodoroBreakMinutes(int minutes) {
+    setSetting('pomodoro_break_minutes', minutes.clamp(1, 60).toString());
   }
 
   void close() => db.dispose();
