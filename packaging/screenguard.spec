@@ -53,6 +53,7 @@ install -Dm644 linux/screenguard.service %{buildroot}%{_userunitdir}/screenguard
 
 # .desktop launcher
 install -Dm644 linux/screenguard.desktop %{buildroot}%{_datadir}/applications/screenguard.desktop
+install -Dm644 linux/screenguard-autostart.desktop %{buildroot}%{_sysconfdir}/xdg/autostart/screenguard-autostart.desktop
 
 # Helper scripts
 install -Dm755 bin/active_window_helper.py %{buildroot}%{_datadir}/screenguard/active_window_helper.py
@@ -71,6 +72,7 @@ install -Dm755 extension/extension.js %{buildroot}%{_datadir}/gnome-shell/extens
 %{_bindir}/screenguard-daemon
 %{_userunitdir}/screenguard.service
 %{_datadir}/applications/screenguard.desktop
+%{_sysconfdir}/xdg/autostart/screenguard-autostart.desktop
 %{_datadir}/icons/hicolor/256x256/apps/screenguard.png
 %{_datadir}/screenguard/
 %{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/

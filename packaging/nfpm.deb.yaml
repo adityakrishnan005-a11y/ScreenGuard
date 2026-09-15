@@ -39,6 +39,8 @@ contents:
     dst: /usr/lib/systemd/user/screenguard.service
   - src: linux/screenguard.desktop
     dst: /usr/share/applications/screenguard.desktop
+  - src: linux/screenguard-autostart.desktop
+    dst: /etc/xdg/autostart/screenguard-autostart.desktop
   - src: bin/active_window_helper.py
     dst: /usr/share/screenguard/active_window_helper.py
   - src: tools/enable_fedora_a11y.sh

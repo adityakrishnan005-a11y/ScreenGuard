@@ -36,6 +36,7 @@ package() {
 
   install -Dm644 linux/screenguard.service "$pkgdir/usr/lib/systemd/user/screenguard.service"
   install -Dm644 linux/screenguard.desktop "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm644 linux/screenguard-autostart.desktop "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"
 
   # GNOME Shell extension
   install -d "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app"

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ScreenGuard Daemon
+Comment=ScreenGuard background screen time tracker
+Exec=/usr/bin/screenguard-daemon
+Icon=screenguard
+Terminal=false
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
