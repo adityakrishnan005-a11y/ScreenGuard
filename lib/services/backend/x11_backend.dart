@@ -75,4 +75,14 @@ class X11Backend implements WindowBackend {
     }
     return false;
   }
+
+  @override
+  Future<bool> closeActiveWindow() async {
+    final wid = _parseWindowId(await _run('xprop', ['-root', '_NET_ACTIVE_WINDOW']));
+    if (wid != null && wid.isNotEmpty) {
+      final res = await _run('xdotool', ['windowclose', wid]);
+      return res.isNotEmpty || true;
+    }
+    return false;
+  }
 }
