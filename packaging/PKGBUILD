@@ -32,9 +32,10 @@ package() {
   ln -s /opt/screenguard/screenguard "$pkgdir/usr/bin/screenguard"
   ln -s /opt/screenguard/screenguard-daemon "$pkgdir/usr/bin/screenguard-daemon"
 
-  # systemd user service + desktop file
+  # systemd user service + desktop file + autostart
   install -Dm644 linux/screenguard.service "$pkgdir/usr/lib/systemd/user/screenguard.service"
   install -Dm644 linux/screenguard.desktop "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm644 linux/screenguard-autostart.desktop "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"
 
   # Helper scripts
   install -Dm755 bin/active_window_helper.py "$pkgdir/usr/share/screenguard/active_window_helper.py"

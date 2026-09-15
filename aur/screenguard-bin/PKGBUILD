@@ -32,6 +32,7 @@ package() {
 
   install -Dm644 linux/screenguard.service "$pkgdir/usr/lib/systemd/user/screenguard.service"
   install -Dm644 linux/screenguard.desktop "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm644 linux/screenguard-autostart.desktop "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"
 
   install -Dm755 bin/active_window_helper.py "$pkgdir/usr/share/screenguard/active_window_helper.py"
   install -Dm755 tools/enable_fedora_a11y.sh "$pkgdir/usr/share/screenguard/enable_fedora_a11y.sh"
