@@ -6,6 +6,21 @@ import 'package:screenguard/services/app_resolver.dart';
 import 'package:screenguard/screens/main_shell.dart';
 import 'package:screenguard/screens/times_up_screen.dart';
 
+/// Resolve the tracker daemon binary: first next to the running GUI binary
+/// (tarball installs), then the packaged location, then PATH.
+String _resolveDaemonPath() {
+  try {
+    final guiDir = File(Platform.resolvedExecutable).parent;
+    final sibling = File(
+        '${guiDir.path}${Platform.pathSeparator}screenguard-daemon');
+    if (sibling.existsSync()) return sibling.path;
+  } catch (_) {}
+  if (File('/usr/bin/screenguard-daemon').existsSync()) {
+    return '/usr/bin/screenguard-daemon';
+  }
+  return 'screenguard-daemon';
+}
+
 void _ensureDaemonRunning() {
   try {
     final res = Process.runSync('systemctl', ['--user', 'is-active', 'screenguard.service']);
@@ -21,10 +36,7 @@ void _ensureDaemonRunning() {
     if (pgrepRes.exitCode == 0 && (pgrepRes.stdout as String).trim().isNotEmpty) {
       return;
     }
-    final daemonPath = File('/usr/bin/screenguard-daemon').existsSync()
-        ? '/usr/bin/screenguard-daemon'
-        : 'screenguard-daemon';
-    Process.start(daemonPath, [], mode: ProcessStartMode.detached);
+    Process.start(_resolveDaemonPath(), [], mode: ProcessStartMode.detached);
   } catch (_) {}
 }
 
