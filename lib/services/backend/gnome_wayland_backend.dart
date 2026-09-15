@@ -198,4 +198,24 @@ class GnomeWaylandBackend implements WindowBackend {
     } catch (_) {}
     return false;
   }
+
+  @override
+  Future<bool> closeActiveWindow() async {
+    try {
+      final r = await Process.run('gdbus', [
+        'call',
+        '--session',
+        '--dest',
+        'org.gnome.Shell',
+        '--object-path',
+        '/org/gnome/Shell/Extensions/ScreenGuard',
+        '--method',
+        'org.gnome.Shell.Extensions.ScreenGuard.CloseActiveWindow',
+      ]).timeout(const Duration(seconds: 2));
+      if (r.exitCode == 0 && r.stdout.toString().contains('true')) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
 }

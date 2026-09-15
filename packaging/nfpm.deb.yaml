@@ -1,7 +1,7 @@
 name: screenguard
 arch: amd64
 platform: linux
-version: 0.1.0
+version: 0.1.1~beta3
 section: utils
 priority: optional
 maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
@@ -14,8 +14,22 @@ license: GPL-3.0
 contents:
   - src: build/linux/x64/release/bundle/
     dst: /opt/screenguard
-  - src: linux/resources/icon.png
+  - src: assets/icons/screenguard.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/screenguard.svg
+  - src: assets/icons/512x512/screenguard.png
+    dst: /usr/share/icons/hicolor/512x512/apps/screenguard.png
+  - src: assets/icons/256x256/screenguard.png
     dst: /usr/share/icons/hicolor/256x256/apps/screenguard.png
+  - src: assets/icons/128x128/screenguard.png
+    dst: /usr/share/icons/hicolor/128x128/apps/screenguard.png
+  - src: assets/icons/64x64/screenguard.png
+    dst: /usr/share/icons/hicolor/64x64/apps/screenguard.png
+  - src: assets/icons/48x48/screenguard.png
+    dst: /usr/share/icons/hicolor/48x48/apps/screenguard.png
+  - src: assets/icons/32x32/screenguard.png
+    dst: /usr/share/icons/hicolor/32x32/apps/screenguard.png
+  - src: assets/icons/256x256/screenguard.png
+    dst: /usr/share/pixmaps/screenguard.png
   - src: /opt/screenguard/screenguard
     dst: /usr/bin/screenguard
     type: symlink

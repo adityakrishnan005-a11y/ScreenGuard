@@ -19,4 +19,5 @@ abstract class WindowBackend {
   Future<WindowInfo> getActiveWindow();
   Future<int> getIdleMs();
   Future<bool> minimizeActiveWindow();
+  Future<bool> closeActiveWindow();
 }

@@ -13,6 +13,13 @@ const DBusInterface = `
     <method name="MinimizeActiveWindow">
       <arg type="b" direction="out" name="success"/>
     </method>
+    <method name="CloseActiveWindow">
+      <arg type="b" direction="out" name="success"/>
+    </method>
+    <method name="CloseWindowByPid">
+      <arg type="i" direction="in" name="pid"/>
+      <arg type="b" direction="out" name="success"/>
+    </method>
     <method name="ListAllWindows">
       <arg type="a(ssi)" direction="out" name="windows"/>
     </method>
@@ -86,6 +93,38 @@ export default class ScreenGuardExtension extends Extension {
             }
         } catch (e) {
             console.error(`[ScreenGuard] Error in MinimizeActiveWindow: ${e}`);
+        }
+        return false;
+    }
+
+    CloseActiveWindow() {
+        try {
+            const win = global.display.focus_window;
+            if (win) {
+                win.delete(global.get_current_time());
+                return true;
+            }
+        } catch (e) {
+            console.error(`[ScreenGuard] Error in CloseActiveWindow: ${e}`);
+        }
+        return false;
+    }
+
+    CloseWindowByPid(targetPid) {
+        try {
+            const actors = global.get_window_actors ? global.get_window_actors() : [];
+            let closed = false;
+            for (const actor of actors) {
+                const win = actor.meta_window;
+                if (!win) continue;
+                if (win.get_pid() === targetPid) {
+                    win.delete(global.get_current_time());
+                    closed = true;
+                }
+            }
+            return closed;
+        } catch (e) {
+            console.error(`[ScreenGuard] Error in CloseWindowByPid: ${e}`);
         }
         return false;
     }
