@@ -1,7 +1,7 @@
 name: screenguard
 arch: amd64
 platform: linux
-version: 0.1.1~beta3
+version: 0.1.1~beta4
 section: utils
 priority: optional
 maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
@@ -37,6 +37,8 @@ contents:
     dst: /usr/bin/screenguard-daemon
   - src: linux/screenguard.service
     dst: /usr/lib/systemd/user/screenguard.service
+  - src: linux/50-screenguard.preset
+    dst: /usr/lib/systemd/user-preset/50-screenguard.preset
   - src: linux/screenguard.desktop
     dst: /usr/share/applications/screenguard.desktop
   - src: linux/screenguard-autostart.desktop
