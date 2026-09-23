@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:screenguard/services/daemon_service.dart';
 import 'package:screenguard/services/db.dart';
 import 'package:screenguard/services/sound_service.dart';
+import 'package:screenguard/services/theme_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final DatabaseService db;
-  const SettingsScreen({super.key, required this.db});
+  final int initialTabIndex;
+  const SettingsScreen({
+    super.key,
+    required this.db,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -14,7 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // ── Tab 1: Notifications & Sounds ──────────────────────────────────────────
+  // ── Tab 1: General ─────────────────────────────────────────────────────────
   late bool _notificationsEnabled;
   late bool _soundEnabled;
   late String _soundTheme;
@@ -33,7 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   bool _isPlayingTest = false;
 
-  // ── Tab 2: Daily Limits & App Limits / Pomodoro ────────────────────────────
+  // ── Tab 2: Daily Limits & Pomodoro ─────────────────────────────────────────
   late bool _pomodoroLoopEnabled;
   late int _pomodoroCycles;
   late int _pomodoroBreakMinutes;
@@ -41,7 +49,11 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
+    );
     _loadSettings();
   }
 
@@ -52,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _loadSettings() {
-    // Tab 1
+    // Tab 1: General
     _notificationsEnabled = widget.db.isNotificationsGloballyEnabled();
     _soundEnabled = widget.db.isSoundGloballyEnabled();
     _soundTheme = widget.db.getSoundTheme();
@@ -69,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _notifyFocusMode = widget.db.isEventNotificationEnabled('focus_mode');
     _soundFocusMode = widget.db.isEventSoundEnabled('focus_mode');
 
-    // Tab 2
+    // Tab 2: Limits & Pomodoro
     _pomodoroLoopEnabled = widget.db.isPomodoroLoopEnabled();
     _pomodoroCycles = widget.db.getPomodoroCyclesCount();
     _pomodoroBreakMinutes = widget.db.getPomodoroBreakMinutes();
@@ -107,32 +119,36 @@ class _SettingsScreenState extends State<SettingsScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(icon: Icon(Icons.notifications_outlined), text: 'Notifications & Sounds'),
-            Tab(icon: Icon(Icons.tune_outlined), text: 'Daily Limits & App Limits'),
+            Tab(icon: Icon(Icons.settings_outlined), text: 'General'),
+            Tab(icon: Icon(Icons.timer_outlined), text: 'Daily Limits & Pomodoro'),
+            Tab(icon: Icon(Icons.shield_outlined), text: 'Tracker Daemon'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildNotificationsTab(),
+          _buildGeneralTab(),
           _buildLimitsTab(),
+          _buildDaemonTab(),
         ],
       ),
     );
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // TAB 1: Notifications & Sounds
+  // TAB 1: General
   // ────────────────────────────────────────────────────────────────────────────
 
-  Widget _buildNotificationsTab() {
+  Widget _buildGeneralTab() {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 850),
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           children: [
+            _buildAppearanceCard(),
+            const SizedBox(height: 16),
             _buildMasterCard(),
             const SizedBox(height: 16),
             _buildSoundSelectionCard(),
@@ -142,6 +158,88 @@ class _SettingsScreenState extends State<SettingsScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAppearanceCard() {
+    final themeService = Provider.of<ThemeService>(context);
+
+    return _sectionCard(
+      children: [
+        _sectionHeader('Appearance'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.palette_outlined,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              ),
+            ),
+            title: const Text(
+              'Theme Mode',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            subtitle: const Text(
+              'Choose adaptive (system default), light, or dark mode',
+              style: TextStyle(fontSize: 12),
+            ),
+            trailing: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: themeService.themeModeString,
+                borderRadius: BorderRadius.circular(12),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'system',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.brightness_auto_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('Adaptive'),
+                      ],
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'light',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.light_mode_rounded, size: 18, color: Colors.orange),
+                        SizedBox(width: 8),
+                        Text('Light'),
+                      ],
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'dark',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.dark_mode_rounded, size: 18, color: Colors.indigo),
+                        SizedBox(width: 8),
+                        Text('Dark'),
+                      ],
+                    ),
+                  ),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    themeService.setThemeMode(val);
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -796,6 +894,262 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
     );
     controller.dispose();
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // TAB 3: Tracker Daemon Management
+  // ────────────────────────────────────────────────────────────────────────────
+
+  Widget _buildDaemonTab() {
+    final daemonService = Provider.of<DaemonService>(context);
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 850),
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          children: [
+            // ── Status & Main Controls Card ─────────────────────────────────
+            _sectionCard(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: (daemonService.isRunning ? Colors.teal : Colors.red)
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        daemonService.isRunning
+                            ? Icons.shield_rounded
+                            : Icons.shield_outlined,
+                        color: daemonService.isRunning ? Colors.teal : Colors.red,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'Background Tracker Daemon',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: (daemonService.isRunning
+                                          ? Colors.green
+                                          : Colors.red)
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: daemonService.isRunning
+                                        ? Colors.green
+                                        : Colors.red,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: daemonService.isRunning
+                                            ? Colors.green
+                                            : Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      daemonService.isRunning
+                                          ? 'RUNNING'
+                                          : 'STOPPED',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: daemonService.isRunning
+                                            ? Colors.green.shade800
+                                            : Colors.red.shade800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            daemonService.isRunning
+                                ? 'The background daemon is actively tracking your screen time and enforcing focus mode & app limits.'
+                                : 'The background daemon is inactive. Screen time tracking, daily limits, and focus mode blocking are currently paused.',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+
+                // Action Buttons
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  children: [
+                    if (daemonService.isLoading)
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        ),
+                      )
+                    else if (daemonService.isRunning) ...[
+                      // Stop button
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red.shade700,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () => daemonService.stopDaemon(),
+                        icon: const Icon(Icons.stop_rounded, size: 20),
+                        label: const Text('Stop Daemon'),
+                      ),
+                      // Restart button
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () => daemonService.restartDaemon(),
+                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                        label: const Text('Restart Daemon'),
+                      ),
+                    ] else ...[
+                      // Start button
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () => daemonService.startDaemon(enableAutostart: false),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                        label: const Text('Start Daemon (For Now)'),
+                      ),
+                      // Start and enable autostart
+                      FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () => daemonService.startDaemon(enableAutostart: true),
+                        icon: const Icon(Icons.all_inclusive_rounded, size: 20),
+                        label: const Text('Start & Enable Autostart'),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // ── Autostart & System Settings Card ─────────────────────────────
+            _sectionCard(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _sectionHeader('System Startup'),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.power_settings_new_rounded,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 20,
+                    ),
+                  ),
+                  title: const Text(
+                    'Autostart Daemon on PC Boot',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Enable systemd user service so ScreenGuard tracking starts automatically whenever your computer turns on.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: daemonService.isAutostartEnabled,
+                  onChanged: daemonService.isLoading
+                      ? null
+                      : (val) => daemonService.setAutostart(val),
+                ),
+                const Divider(),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.restore_outlined),
+                  title: const Text(
+                    'Reset First-Run Setup Preference',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
+                  ),
+                  subtitle: const Text(
+                    'Show the setup prompt dialog next time ScreenGuard opens without an active daemon.',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
+                  trailing: OutlinedButton(
+                    onPressed: () {
+                      widget.db.setSetting('daemon_initial_choice', '');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Initial setup preference reset.'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    child: const Text('Reset'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
   }
 
   // ────────────────────────────────────────────────────────────────────────────

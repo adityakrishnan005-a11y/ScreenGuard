@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:screenguard/screens/dashboard.dart';
 import 'package:screenguard/screens/focus_screen.dart';
+import 'package:screenguard/services/daemon_service.dart';
+import 'package:screenguard/services/db.dart';
+import 'package:screenguard/widgets/daemon_prompt_dialog.dart';
+import 'package:screenguard/widgets/daemon_status_banner.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -18,11 +23,28 @@ class _MainShellState extends State<MainShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final daemonService = Provider.of<DaemonService>(context, listen: false);
+      final db = Provider.of<DatabaseService>(context, listen: false);
+      DaemonPromptDialog.showIfNeeded(context, daemonService, db);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      body: Column(
+        children: [
+          const DaemonStatusBanner(),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _pages,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
