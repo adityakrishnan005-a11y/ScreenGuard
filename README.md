@@ -11,6 +11,19 @@
 
 ---
 
+## AI Transparency & Development Disclosure
+
+In the spirit of open-source transparency and clear attribution, here is the exact breakdown of how AI tooling was utilized during the development of ScreenGuard:
+
+* **Tooling & Models Used**: Assisted using Google's **Antigravity (AGY)** developer tools (free tier only), primarily utilizing lightweight Flash-tier models (Gemini Flash 3.5 early in development, moving to Gemini Flash 3.6 & 3.7).
+* **Architecture & System Design**: **Manual** — The application architecture, multi-process daemon model, SQLite schema, D-Bus interfaces, and Flutter Material 3 UI/UX were designed and structured manually.
+* **Core Codebase & Implementation**: **Manual** — All application logic (Flutter UI, background tracking daemon, GNOME Shell extension in GJS, X11 EWMH integration, and Pomodoro state machine) was written and developed by the author.
+* **Debugging & System Troubleshooting**: **AI-Assisted** — Used as a pair-programming assistant for diagnosing distro-specific Linux edge cases (e.g., SQLite dynamic loader fallback, Dart AOT stripping in `makepkg`, PulseAudio stream routing, and `systemd` user preset overrides).
+* **Packaging & CI/CD Automation**: **AI-Generated / Tool-Assisted** — Used to generate and automate distribution pipelines, specifically the signed custom Arch Linux repository setup (created as an interim solution due to AUR new user registration freeze), along with NFPM configs and Copr RPM spec files.
+* **Documentation**: **AI-Assisted** — Assisted in drafting, organizing, and formatting documentation, README structure, and release notes.
+
+---
+
 ## Key Features
 
 ### 1. Digital Wellbeing Dashboard
