@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 ScreenGuard Documentation & FAQ
+    url: https://github.com/adityakrishnan005-a11y/ScreenGuard#faq
+    about: Check the FAQ and common troubleshooting steps before opening an issue.

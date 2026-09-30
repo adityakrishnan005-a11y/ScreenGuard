@@ -1,0 +1,82 @@
+name: 🐛 Bug Report
+description: Report a bug, crash, or unexpected behavior in ScreenGuard
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much detail as possible to help reproduce and resolve it quickly.
+
+  - type: dropdown
+    id: display-server
+    attributes:
+      label: Display Server
+      description: What display server are you running? (Run `echo $XDG_SESSION_TYPE` in terminal if unsure)
+      options:
+        - "Wayland (GNOME Shell)"
+        - "Wayland (KDE Plasma)"
+        - "Wayland (Hyprland / Sway / Other)"
+        - "X11 (GNOME / KDE / XFCE / Cinnamon / MATE / etc.)"
+        - "Other"
+    validations:
+      required: true
+
+  - type: input
+    id: system-info
+    attributes:
+      label: Linux Distribution & Desktop Environment
+      description: e.g., Fedora 41 (GNOME 47), Ubuntu 24.04 (GNOME 46), Arch Linux (KDE Plasma 6.2)
+      placeholder: "Fedora 41 - GNOME 47.1"
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: ScreenGuard Version & Install Method
+      description: e.g., v0.1.0 (from DNF Copr), v0.1.1-beta.4 (.deb package), or custom build
+      placeholder: "v0.1.0 via DNF Copr"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+      placeholder: "When daily app limit is reached, ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce the problem?
+      placeholder: |
+        1. Open ScreenGuard
+        2. Set daily limit for Firefox to 1 minute
+        3. Use Firefox for 1 minute
+        4. See error / behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What did you expect to happen, and what actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs-media
+    attributes:
+      label: Relevant Logs, Screenshots or Video Proof
+      description: |
+        - For daemon issues: output of `systemctl --user status screenguard`
+        - For X11 issues: please attach a screenshot or short video recording if possible
+      placeholder: "Paste terminal output, error logs, or drag and drop screenshots/videos here..."
+    validations:
+      required: false

@@ -1,0 +1,43 @@
+name: 💡 Feature Request
+description: Suggest a new feature, improvement, or idea for ScreenGuard
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature! Please explain the concept and how it benefits Linux users.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: Is your feature request related to a problem or limitation? Please describe.
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution or feature you'd like to see added.
+      placeholder: "Add support for..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or Mockups
+      description: Have you considered any alternative solutions, or do you have UI mockups?
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context, references, or screenshots about the feature request.
+    validations:
+      required: false
