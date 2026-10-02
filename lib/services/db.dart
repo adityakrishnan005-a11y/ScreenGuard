@@ -567,5 +567,24 @@ class DatabaseService {
     setSetting('pomodoro_break_minutes', minutes.clamp(1, 60).toString());
   }
 
+  bool hasNotifiedDailyMilestone(String milestoneKey, String dateKey) {
+    return getSetting('last_notified_$milestoneKey') == dateKey;
+  }
+
+  void markDailyMilestoneNotified(String milestoneKey, String dateKey) {
+    setSetting('last_notified_$milestoneKey', dateKey);
+  }
+
+  int getOvertimeMilestoneIndex(String dateKey) {
+    final savedDate = getSetting('overtime_milestone_date');
+    if (savedDate != dateKey) return 0;
+    return int.tryParse(getSetting('overtime_milestone_index', defaultValue: '0')) ?? 0;
+  }
+
+  void setOvertimeMilestoneIndex(String dateKey, int index) {
+    setSetting('overtime_milestone_date', dateKey);
+    setSetting('overtime_milestone_index', index.toString());
+  }
+
   void close() => db.dispose();
 }

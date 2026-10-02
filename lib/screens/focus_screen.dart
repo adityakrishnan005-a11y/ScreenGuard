@@ -173,6 +173,10 @@ class _FocusScreenState extends State<FocusScreen> {
             'dialog-information',
             '-a',
             'ScreenGuard',
+            '-h',
+            'string:x-canonical-private-synchronous:screenguard-focus_mode',
+            '-h',
+            'string:desktop-entry:screenguard',
           ]);
         } catch (_) {}
       }
@@ -210,6 +214,10 @@ class _FocusScreenState extends State<FocusScreen> {
           'dialog-information',
           '-a',
           'ScreenGuard',
+          '-h',
+          'string:x-canonical-private-synchronous:screenguard-focus_mode',
+          '-h',
+          'string:desktop-entry:screenguard',
         ]);
       } catch (_) {}
     }
@@ -237,6 +245,10 @@ class _FocusScreenState extends State<FocusScreen> {
           'dialog-information',
           '-a',
           'ScreenGuard',
+          '-h',
+          'string:x-canonical-private-synchronous:screenguard-focus_mode',
+          '-h',
+          'string:desktop-entry:screenguard',
         ]);
       } catch (_) {}
     }
@@ -256,6 +268,10 @@ class _FocusScreenState extends State<FocusScreen> {
           'dialog-information',
           '-a',
           'ScreenGuard',
+          '-h',
+          'string:x-canonical-private-synchronous:screenguard-focus_mode',
+          '-h',
+          'string:desktop-entry:screenguard',
         ]);
       } catch (_) {}
     }

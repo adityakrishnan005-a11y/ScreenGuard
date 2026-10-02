@@ -224,9 +224,11 @@ class Tracker {
   final Set<String> _warnedAppsToday = {};
   final Set<String> _lockedAppsNotifiedToday = {};
   int _lastWarnDay = -1;
-  bool _notified50PercentGoal = false;
-  bool _notified100PercentGoal = false;
-  int _lastOvertimeMilestoneIndex = 0;
+
+  String _todayDateKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
 
   void _checkDailyGoal() {
     final nowDay = DateTime.now().day;
@@ -234,9 +236,6 @@ class Tracker {
       _warnedAppsToday.clear();
       _lockedAppsNotifiedToday.clear();
       _lastDistractionNotifyMs.clear();
-      _notified50PercentGoal = false;
-      _notified100PercentGoal = false;
-      _lastOvertimeMilestoneIndex = 0;
       _lastWarnDay = nowDay;
     }
 
@@ -244,37 +243,51 @@ class Tracker {
     if (goalMs <= 0) return;
 
     final todayMs = db.todayTotalMs();
+    final dateKey = _todayDateKey();
 
-    // 1. 50% Daily Goal Milestone
-    if (todayMs >= (goalMs * 0.5) && !_notified50PercentGoal) {
-      _notified50PercentGoal = true;
-      _sendNotification(
-        'ScreenGuard — Daily Goal',
-        '50% daily goal of screen time reached. Kindly take a break.',
-        icon: 'dialog-information',
-        eventKey: 'daily_goal_50',
-      );
-    }
+    // 1. 50% Daily Goal Milestone (only if currently between 50% and 100%)
+    if (todayMs >= (goalMs * 0.5) && todayMs < goalMs) {
+      if (!db.hasNotifiedDailyMilestone('goal_50', dateKey)) {
+        db.markDailyMilestoneNotified('goal_50', dateKey);
+        _sendNotification(
+          'ScreenGuard — Daily Goal',
+          '50% daily goal of screen time reached. Kindly take a break.',
+          icon: 'dialog-information',
+          eventKey: 'daily_goal_50',
+        );
+      }
+    } else if (todayMs >= goalMs) {
+      // If already at or past 100%, mark 50% as passed without sending a stale 50% alert
+      if (!db.hasNotifiedDailyMilestone('goal_50', dateKey)) {
+        db.markDailyMilestoneNotified('goal_50', dateKey);
+      }
 
-    // 2. 100% Daily Goal Milestone
-    if (todayMs >= goalMs && !_notified100PercentGoal) {
-      _notified100PercentGoal = true;
-      _sendNotification(
-        'ScreenGuard — Daily Goal Reached',
-        '100% daily goal of screen time reached.',
-        icon: 'dialog-warning',
-        eventKey: 'daily_goal_100',
-      );
-    }
+      // 2. 100% Daily Goal Milestone
+      if (!db.hasNotifiedDailyMilestone('goal_100', dateKey)) {
+        db.markDailyMilestoneNotified('goal_100', dateKey);
+        // Initialize overtime baseline to the current level to prevent firing both 100% and overtime in the same tick
+        final stepMs = (goalMs * 0.5).round();
+        if (stepMs > 0) {
+          final currentMilestone = (todayMs - goalMs) ~/ stepMs;
+          db.setOvertimeMilestoneIndex(dateKey, currentMilestone);
+        }
+        _sendNotification(
+          'ScreenGuard — Daily Goal Reached',
+          '100% daily goal of screen time reached.',
+          icon: 'dialog-warning',
+          eventKey: 'daily_goal_100',
+        );
+        return;
+      }
 
-    // 3. Overtime Milestones (every 50% extra screen time beyond the daily goal)
-    if (todayMs > goalMs) {
+      // 3. Overtime Milestones (every 50% extra screen time beyond the daily goal)
       final overtimeMs = todayMs - goalMs;
       final stepMs = (goalMs * 0.5).round();
       if (stepMs > 0) {
         final currentMilestone = overtimeMs ~/ stepMs;
-        if (currentMilestone > _lastOvertimeMilestoneIndex) {
-          _lastOvertimeMilestoneIndex = currentMilestone;
+        final lastOvertimeIndex = db.getOvertimeMilestoneIndex(dateKey);
+        if (currentMilestone > lastOvertimeIndex) {
+          db.setOvertimeMilestoneIndex(dateKey, currentMilestone);
           final milestoneOvertimeMs = currentMilestone * stepMs;
           _sendNotification(
             'ScreenGuard — Goal Exceeded',
@@ -293,9 +306,6 @@ class Tracker {
       _warnedAppsToday.clear();
       _lockedAppsNotifiedToday.clear();
       _lastDistractionNotifyMs.clear();
-      _notified50PercentGoal = false;
-      _notified100PercentGoal = false;
-      _lastOvertimeMilestoneIndex = 0;
       _lastWarnDay = nowDay;
     }
 
@@ -347,7 +357,18 @@ class Tracker {
   }) {
     if (db.isNotificationsGloballyEnabled() && db.isEventNotificationEnabled(eventKey)) {
       try {
-        Process.run('notify-send', [summary, body, '-i', icon, '-a', 'ScreenGuard']);
+        Process.run('notify-send', [
+          summary,
+          body,
+          '-i',
+          icon,
+          '-a',
+          'ScreenGuard',
+          '-h',
+          'string:x-canonical-private-synchronous:screenguard-$eventKey',
+          '-h',
+          'string:desktop-entry:screenguard',
+        ]);
       } catch (_) {}
     }
 

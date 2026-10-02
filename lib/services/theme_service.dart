@@ -18,7 +18,6 @@ class ThemeService extends ChangeNotifier {
       case ThemeMode.dark:
         return 'dark';
       case ThemeMode.system:
-      default:
         return 'system';
     }
   }
