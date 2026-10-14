@@ -39,12 +39,14 @@ class AppResolver {
   }
 
   void scanDir(String dir) {
-    final d = Directory(dir);
-    if (!d.existsSync()) return;
-    for (final f in d.listSync()) {
-      if (f is! File || !f.path.endsWith('.desktop')) continue;
-      _parseDesktop(f, addToCache: true);
-    }
+    try {
+      final d = Directory(dir);
+      if (!d.existsSync()) return;
+      for (final f in d.listSync()) {
+        if (f is! File || !f.path.endsWith('.desktop')) continue;
+        _parseDesktop(f, addToCache: true);
+      }
+    } catch (_) {}
   }
 
   /// Returns all user-visible installed applications from .desktop dirs.
@@ -59,24 +61,31 @@ class AppResolver {
     final seen = <String>{};
     final result = <Map<String, String>>[];
     for (final dirPath in dirs) {
-      final d = Directory(dirPath);
-      if (!d.existsSync()) continue;
-      for (final f in d.listSync()) {
-        if (f is! File || !f.path.endsWith('.desktop')) continue;
-        final base = f.uri.pathSegments.last.replaceAll('.desktop', '').toLowerCase();
-        if (seen.contains(base)) continue;
-        final entry = _parseDesktop(f, addToCache: false);
-        if (entry == null) continue;
-        seen.add(base);
-        result.add({'app': base, 'name': entry.name, 'icon': entry.icon ?? ''});
-      }
+      try {
+        final d = Directory(dirPath);
+        if (!d.existsSync()) continue;
+        for (final f in d.listSync()) {
+          if (f is! File || !f.path.endsWith('.desktop')) continue;
+          final base = f.uri.pathSegments.last.replaceAll('.desktop', '').toLowerCase();
+          if (seen.contains(base)) continue;
+          final entry = _parseDesktop(f, addToCache: false);
+          if (entry == null) continue;
+          seen.add(base);
+          result.add({'app': base, 'name': entry.name, 'icon': entry.icon ?? ''});
+        }
+      } catch (_) {}
     }
     result.sort((a, b) => a['name']!.toLowerCase().compareTo(b['name']!.toLowerCase()));
     return result;
   }
 
   AppMeta? _parseDesktop(File f, {required bool addToCache}) {
-    final content = f.readAsStringSync();
+    String content;
+    try {
+      content = f.readAsStringSync();
+    } catch (_) {
+      return null;
+    }
     String? wmClass, name, icon;
     final base = f.uri.pathSegments.last.replaceAll('.desktop', '').toLowerCase();
     bool inMainSection = false;
@@ -96,16 +105,17 @@ class AppResolver {
 
       if (!inMainSection) continue;
 
-      if (line.startsWith('StartupWMClass=')) {
+      final lower = line.toLowerCase();
+      if (lower.startsWith('startupwmclass=')) {
         wmClass = line.substring(15).trim().toLowerCase();
       } else if (line.startsWith('Name=') && name == null) {
         name = line.substring(5).trim();
       } else if (line.startsWith('Icon=')) {
         icon = line.substring(5).trim();
-      } else if (line == 'NoDisplay=true' || line == 'Hidden=true') {
+      } else if (lower == 'nodisplay=true' || lower == 'hidden=true') {
         skip = true;
         break;
-      } else if (line.startsWith('Type=') && line != 'Type=Application') {
+      } else if (lower.startsWith('type=') && lower != 'type=application') {
         skip = true;
         break;
       }
@@ -116,10 +126,52 @@ class AppResolver {
     if (addToCache) {
       if (wmClass != null && wmClass.isNotEmpty) {
         _cache[wmClass] = meta;
+        _addAlias(wmClass, base);
       }
       _cache[base] = meta;
     }
     return meta;
+  }
+
+  final Map<String, Set<String>> _aliasMap = {};
+
+  void _addAlias(String a, String b) {
+    if (a.isEmpty || b.isEmpty || a == b) return;
+    _aliasMap.putIfAbsent(a, () => {}).add(b);
+    _aliasMap.putIfAbsent(b, () => {}).add(a);
+  }
+
+  List<String> getAliases(String app) {
+    final key = app.toLowerCase();
+    final result = <String>{key};
+    if (_aliasMap.containsKey(key)) {
+      result.addAll(_aliasMap[key]!);
+    }
+    const staticAliases = {
+      'spotify': ['com.spotify.client', 'spotify-adblock'],
+      'com.spotify.client': ['spotify', 'spotify-adblock'],
+      'code': ['com.visualstudio.code'],
+      'com.visualstudio.code': ['code'],
+      'discord': ['com.discordapp.discord'],
+      'com.discordapp.discord': ['discord'],
+      'slack': ['com.slack.slack'],
+      'com.slack.slack': ['slack'],
+      'steam': ['com.valvesoftware.steam'],
+      'com.valvesoftware.steam': ['steam'],
+      'telegram': ['org.telegram.desktop'],
+      'org.telegram.desktop': ['telegram'],
+      'firefox': ['org.mozilla.firefox'],
+      'org.mozilla.firefox': ['firefox'],
+      'chromium': ['org.chromium.chromium', 'chromium-browser'],
+      'chromium-browser': ['chromium', 'org.chromium.chromium'],
+      'org.chromium.chromium': ['chromium', 'chromium-browser'],
+      'signal': ['org.signal.signal'],
+      'org.signal.signal': ['signal'],
+    };
+    if (staticAliases.containsKey(key)) {
+      result.addAll(staticAliases[key]!);
+    }
+    return result.toList();
   }
 
   AppMeta resolve(String rawClass) {
@@ -138,3 +190,4 @@ class AppResolver {
     return AppMeta(name, null);
   }
 }
+

@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:screenguard/services/crash_reporter.dart';
 import 'package:screenguard/services/daemon_service.dart';
 import 'package:screenguard/services/db.dart';
 import 'package:screenguard/services/sound_service.dart';
 import 'package:screenguard/services/theme_service.dart';
+import 'package:screenguard/services/update_checker.dart';
+import 'package:screenguard/screens/crash_reports_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final DatabaseService db;
@@ -46,13 +50,24 @@ class _SettingsScreenState extends State<SettingsScreen>
   late int _pomodoroCycles;
   late int _pomodoroBreakMinutes;
 
+  // ── Tab 4: Updates & Crash Reports ─────────────────────────────────────
+  late UpdateChecker _updateChecker;
+  late bool _checkUpdatesEnabled;
+  late bool _includeBeta;
+  late String _checkFrequency;
+  late bool _crashReportingEnabled;
+  bool _isCheckingUpdate = false;
+  bool _isInstallingUpdate = false;
+  bool _isSendingTestCrash = false;
+  int _crashCount = 0;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 3,
+      length: 4,
       vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 2),
+      initialIndex: widget.initialTabIndex.clamp(0, 3),
     );
     _loadSettings();
   }
@@ -85,6 +100,15 @@ class _SettingsScreenState extends State<SettingsScreen>
     _pomodoroLoopEnabled = widget.db.isPomodoroLoopEnabled();
     _pomodoroCycles = widget.db.getPomodoroCyclesCount();
     _pomodoroBreakMinutes = widget.db.getPomodoroBreakMinutes();
+
+    // Tab 4: Updates & Crash Reports
+    _updateChecker = UpdateChecker(db: widget.db);
+    _checkUpdatesEnabled = _updateChecker.checkUpdatesEnabled;
+    _includeBeta = _updateChecker.includeBeta;
+    _checkFrequency = _updateChecker.checkFrequency;
+    final crashReporter = CrashReporter();
+    _crashCount = crashReporter.getCrashCount();
+    _crashReportingEnabled = crashReporter.isReportingEnabled();
   }
 
   Future<void> _pickCustomAudio() async {
@@ -118,10 +142,20 @@ class _SettingsScreenState extends State<SettingsScreen>
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.settings_outlined), text: 'General'),
-            Tab(icon: Icon(Icons.timer_outlined), text: 'Daily Limits & Pomodoro'),
-            Tab(icon: Icon(Icons.shield_outlined), text: 'Tracker Daemon'),
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [
+            const Tab(icon: Icon(Icons.settings_outlined), text: 'General'),
+            const Tab(icon: Icon(Icons.timer_outlined), text: 'Daily Limits & Pomodoro'),
+            const Tab(icon: Icon(Icons.shield_outlined), text: 'Tracker Daemon'),
+            Tab(
+              icon: Badge(
+                isLabelVisible: _crashCount > 0,
+                label: Text('$_crashCount'),
+                child: const Icon(Icons.system_update_outlined),
+              ),
+              text: 'Updates',
+            ),
           ],
         ),
       ),
@@ -131,6 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           _buildGeneralTab(),
           _buildLimitsTab(),
           _buildDaemonTab(),
+          _buildUpdatesTab(),
         ],
       ),
     );
@@ -1145,6 +1180,491 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ],
             ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // TAB 4: Updates & Crash Reports
+  // ────────────────────────────────────────────────────────────────────────────
+
+  Widget _buildUpdatesTab() {
+    final hasUpdate = _updateChecker.hasUpdate;
+    final latestVersion = _updateChecker.lastKnownVersion;
+    final currentVersion = _updateChecker.currentVersion;
+    final lastCheck = _updateChecker.lastCheckTime;
+    final changelog = _updateChecker.lastChangelog;
+    final releaseUrl = _updateChecker.lastKnownVersionUrl;
+    final isPrerelease = _updateChecker.isPrerelease;
+
+    // Format last-checked time
+    String lastCheckStr = 'Never';
+    if (lastCheck.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(lastCheck);
+        final diff = DateTime.now().difference(dt);
+        if (diff.inMinutes < 60) {
+          lastCheckStr = '${diff.inMinutes} minutes ago';
+        } else if (diff.inHours < 24) {
+          lastCheckStr = '${diff.inHours} hours ago';
+        } else {
+          lastCheckStr = '${diff.inDays} days ago';
+        }
+      } catch (_) {}
+    }
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 850),
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          children: [
+            // ── Update Status Card ──────────────────────────────────────────
+            _sectionCard(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: (hasUpdate ? Colors.green : Theme.of(context).colorScheme.primary)
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        hasUpdate
+                            ? Icons.system_update_alt_rounded
+                            : Icons.check_circle_outline_rounded,
+                        color: hasUpdate ? Colors.green : Theme.of(context).colorScheme.primary,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                hasUpdate ? 'Update Available' : 'ScreenGuard is up to date',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (hasUpdate && isPrerelease) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.orange.shade300),
+                                  ),
+                                  child: Text(
+                                    'BETA',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange.shade800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            hasUpdate
+                                ? 'v$latestVersion is available (current: v$currentVersion)'
+                                : 'v$currentVersion — Last checked: $lastCheckStr',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+
+                // Changelog snippet
+                if (hasUpdate && changelog.isNotEmpty) ...[
+                  Text(
+                    'What\'s new in v$latestVersion',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      changelog,
+                      style: const TextStyle(fontSize: 12.5),
+                      maxLines: 6,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Action buttons
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    // Check Now
+                    if (_isCheckingUpdate)
+                      const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        ),
+                      )
+                    else
+                      OutlinedButton.icon(
+                        onPressed: _checkUpdatesEnabled
+                            ? () async {
+                                setState(() => _isCheckingUpdate = true);
+                                await _updateChecker.checkForUpdates();
+                                if (mounted) {
+                                  setState(() {
+                                    _isCheckingUpdate = false;
+                                    _checkUpdatesEnabled = _updateChecker.checkUpdatesEnabled;
+                                    _includeBeta = _updateChecker.includeBeta;
+                                    _checkFrequency = _updateChecker.checkFrequency;
+                                  });
+                                }
+                              }
+                            : null,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text('Check Now'),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+
+                    // Download & Install
+                    if (hasUpdate) ...[
+                      if (_isInstallingUpdate)
+                        const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          ),
+                        )
+                      else
+                        FilledButton.icon(
+                          onPressed: () async {
+                            setState(() => _isInstallingUpdate = true);
+                            final ok =
+                                await _updateChecker.downloadAndInstall(latestVersion);
+                            if (mounted) {
+                              setState(() => _isInstallingUpdate = false);
+                              if (ok) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Update installed! Restart ScreenGuard to use the new version.',
+                                    ),
+                                    duration: Duration(seconds: 5),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Installation failed. Try downloading manually from GitHub.',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.download_rounded, size: 18),
+                          label: Text('Install v$latestVersion'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+
+                      // View release on GitHub
+                      if (releaseUrl.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            try {
+                              Process.run('xdg-open', [releaseUrl]);
+                            } catch (_) {}
+                          },
+                          icon: const Icon(Icons.open_in_new, size: 16),
+                          label: const Text('View Release'),
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+
+                      // Dismiss
+                      TextButton(
+                        onPressed: () {
+                          _updateChecker.dismissedVersion = latestVersion;
+                          setState(() {});
+                        },
+                        child: const Text('Dismiss'),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Update Preferences Card ─────────────────────────────────────
+            _sectionCard(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _sectionHeader('Update Preferences'),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.update_outlined),
+                  title: const Text(
+                    'Check for Updates Automatically',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Notify when a new version of ScreenGuard is available',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: _checkUpdatesEnabled,
+                  onChanged: (val) {
+                    setState(() => _checkUpdatesEnabled = val);
+                    _updateChecker.checkUpdatesEnabled = val;
+                  },
+                ),
+                const Divider(height: 1),
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: _checkUpdatesEnabled ? 1.0 : 0.4,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.schedule_outlined),
+                        title: const Text(
+                          'Check Frequency',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        trailing: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _checkFrequency,
+                            borderRadius: BorderRadius.circular(12),
+                            items: const [
+                              DropdownMenuItem(value: 'daily', child: Text('Daily')),
+                              DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                              DropdownMenuItem(value: 'never', child: Text('Never')),
+                            ],
+                            onChanged: _checkUpdatesEnabled
+                                ? (val) {
+                                    if (val != null) {
+                                      setState(() => _checkFrequency = val);
+                                      _updateChecker.checkFrequency = val;
+                                    }
+                                  }
+                                : null,
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: const Icon(Icons.science_outlined),
+                        title: const Text(
+                          'Include Beta Versions',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        subtitle: const Text(
+                          'Get notified about pre-release builds for early access to new features',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: _includeBeta,
+                        onChanged: _checkUpdatesEnabled
+                            ? (val) {
+                                setState(() => _includeBeta = val);
+                                _updateChecker.includeBeta = val;
+                              }
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Crash Reports & Diagnostics Card ───────────────────────────
+            _sectionCard(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _sectionHeader('Crash Reports & Diagnostics'),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.cloud_upload_outlined),
+                  title: const Text(
+                    'Send Anonymous Crash Reports',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Automatically transmit error traces and version info to the developer via Sentry. Strictly anonymous — no personal or screen time data is ever collected.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: _crashReportingEnabled,
+                  onChanged: (val) {
+                    setState(() => _crashReportingEnabled = val);
+                    final reporter = CrashReporter();
+                    reporter.setReportingEnabled(val);
+                  },
+                ),
+                const Divider(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Developer Connection Test',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Send a ping to verify error telemetry can reach the developer dashboard.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _isSendingTestCrash
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : OutlinedButton.icon(
+                            onPressed: _crashReportingEnabled
+                                ? () async {
+                                    setState(() => _isSendingTestCrash = true);
+                                    final reporter = CrashReporter();
+                                    final ok = await reporter.sendToSentry(
+                                      level: 'info',
+                                      source: 'gui',
+                                      message: 'Manual test ping from ScreenGuard Settings',
+                                    );
+                                    if (mounted) {
+                                      setState(() => _isSendingTestCrash = false);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            ok
+                                                ? 'Diagnostic ping delivered to developer Sentry dashboard!'
+                                                : 'Failed to deliver ping. Check your internet connection.',
+                                          ),
+                                          backgroundColor: ok ? Colors.teal : Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                : null,
+                            icon: const Icon(Icons.send_rounded, size: 16),
+                            label: const Text('Send Test Ping'),
+                            style: OutlinedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                  ],
+                ),
+                const Divider(height: 24),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: (_crashCount > 0 ? Colors.red : Colors.green)
+                          .withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _crashCount > 0
+                          ? Icons.bug_report_outlined
+                          : Icons.check_circle_outline,
+                      color: _crashCount > 0 ? Colors.red : Colors.green,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    _crashCount > 0
+                        ? '$_crashCount local crash ${_crashCount == 1 ? 'report' : 'reports'} stored'
+                        : 'No local crash reports',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    _crashCount > 0
+                        ? 'View details, stack traces, and report issues on GitHub'
+                        : 'Everything is running smoothly',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: _crashCount > 0
+                      ? FilledButton.tonal(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CrashReportsScreen(),
+                              ),
+                            ).then((_) {
+                              final reporter = CrashReporter();
+                              setState(() {
+                                _crashCount = reporter.getCrashCount();
+                              });
+                            });
+                          },
+                          child: const Text('View Reports'),
+                        )
+                      : null,
+                ),
+              ],
+            ),
+
             const SizedBox(height: 32),
           ],
         ),

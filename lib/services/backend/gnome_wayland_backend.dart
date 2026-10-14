@@ -29,22 +29,11 @@ class GnomeWaylandBackend implements WindowBackend {
   }
 
   Future<String> _runHelper() async {
-    Process p;
     try {
-      p = await Process.start('python3', [_helperPath()]);
-    } on ProcessException {
-      return '';
-    }
-    try {
-      final out = await p.stdout
-          .transform(utf8.decoder)
-          .join()
-          .timeout(const Duration(seconds: 5));
-      final exitCode = await p.exitCode.timeout(const Duration(seconds: 2));
-      if (exitCode != 0) return '';
-      return out.trim();
-    } on TimeoutException {
-      p.kill();
+      final r = await Process.run('python3', [_helperPath()]).timeout(const Duration(seconds: 2));
+      if (r.exitCode != 0) return '';
+      return (r.stdout as String).trim();
+    } catch (_) {
       return '';
     }
   }

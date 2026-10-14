@@ -33,6 +33,16 @@ echo "[tarball] building Flutter release bundle..."
 echo "[tarball] compiling background daemon..."
 dart compile exe "$REPO_ROOT/bin/daemon.dart" -o "$BUNDLE/screenguard-daemon"
 
+echo "[tarball] compiling C watchdog supervisor..."
+if command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1; then
+  CC_BIN="cc"; command -v cc >/dev/null 2>&1 || CC_BIN="gcc"
+  $CC_BIN -O2 -Wall -o "$BUNDLE/screenguard-watchdog" "$REPO_ROOT/src/watchdog.c" \
+    && echo "[tarball] watchdog compiled ($(du -h "$BUNDLE/screenguard-watchdog" | cut -f1))" \
+    || echo "[tarball] WARNING: watchdog build failed — continuing without it"
+else
+  echo "[tarball] WARNING: no C compiler — skipping watchdog (install gcc or clang)"
+fi
+
 echo "[tarball] staging..."
 cp -a "$BUNDLE/." "$STAGE/"
 cp -a "$REPO_ROOT/tools/install.sh" "$STAGE/install.sh"

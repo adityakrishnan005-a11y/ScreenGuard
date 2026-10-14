@@ -83,6 +83,7 @@ fi
 APP_DIR="$PREFIX/opt/screenguard"
 BIN_DIR="$PREFIX/bin"
 DAEMON_BIN="$APP_DIR/screenguard-daemon"
+WATCHDOG_BIN="$APP_DIR/screenguard-watchdog"
 
 if [ "$SYSTEM" -eq 1 ]; then
   UNIT_DIR="/etc/systemd/user"
@@ -167,12 +168,15 @@ fi
 log "installing bundle to $APP_DIR ..."
 mkdir -p "$APP_DIR" "$BIN_DIR"
 cp -a "$SRC_DIR/screenguard" "$SRC_DIR/screenguard-daemon" "$APP_DIR/"
+[ -f "$SRC_DIR/screenguard-watchdog" ] && cp -a "$SRC_DIR/screenguard-watchdog" "$APP_DIR/" && chmod +x "$APP_DIR/screenguard-watchdog"
 [ -d "$SRC_DIR/data" ] && cp -a "$SRC_DIR/data" "$APP_DIR/"
-[ -d "$SRC_DIR/lib" ] && cp -a "$SRC_DIR/lib" "$APP_DIR/"
+[ -d "$SRC_DIR/lib" ]  && cp -a "$SRC_DIR/lib"  "$APP_DIR/"
 chmod +x "$APP_DIR/screenguard" "$APP_DIR/screenguard-daemon"
 ln -sf "$APP_DIR/screenguard" "$BIN_DIR/screenguard"
 ln -sf "$APP_DIR/screenguard-daemon" "$BIN_DIR/screenguard-daemon"
+[ -f "$WATCHDOG_BIN" ] && ln -sf "$WATCHDOG_BIN" "$BIN_DIR/screenguard-watchdog"
 log "binaries linked: $BIN_DIR/screenguard, $BIN_DIR/screenguard-daemon"
+[ -f "$WATCHDOG_BIN" ] && log "watchdog linked: $BIN_DIR/screenguard-watchdog"
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) log "NOTE: $BIN_DIR is not on your PATH. Add this to ~/.bashrc:  export PATH=\"\$PATH:$BIN_DIR\"" ;;
@@ -236,7 +240,8 @@ if [ "$HAVE_SYSTEMD_USER" -eq 1 ]; then
   cat > "$UNIT_FILE" <<EOF
 [Unit]
 Description=ScreenGuard Tracker Daemon
-After=default.target
+PartOf=graphical-session.target
+After=graphical-session.target
 
 [Service]
 Type=simple
@@ -245,7 +250,7 @@ Restart=always
 RestartSec=3
 
 [Install]
-WantedBy=default.target graphical-session.target
+WantedBy=graphical-session.target
 EOF
   if [ "$SYSTEM" -eq 1 ]; then
     systemctl daemon-reload 2>/dev/null || true
@@ -286,12 +291,15 @@ elif [ "$UNIT_ACTIVE" -eq 0 ] && [ "$PRESERVE_CHOICE" -eq 1 ] && [ -f "$AUTOSTAR
 fi
 if [ "$WANT_XDG" -eq 1 ]; then
   mkdir -p "$AUTOSTART_DIR"
+  # Use the watchdog as supervisor when available; falls back to daemon directly
+  XDG_EXEC="$DAEMON_BIN"
+  [ -x "$WATCHDOG_BIN" ] && XDG_EXEC="$WATCHDOG_BIN"
   cat > "$AUTOSTART_FILE" <<EOF
 [Desktop Entry]
 Type=Application
 Name=ScreenGuard Daemon
 Comment=ScreenGuard background screen time tracker
-Exec=$DAEMON_BIN
+Exec=$XDG_EXEC
 Icon=screenguard
 Terminal=false
 Hidden=false
@@ -299,6 +307,7 @@ NoDisplay=true
 X-GNOME-Autostart-enabled=true
 EOF
   log "$XDG_REASON"
+  [ -x "$WATCHDOG_BIN" ] && log "watchdog will supervise daemon (auto-restart on crash)"
 elif [ "$UNIT_ACTIVE" -eq 1 ] && [ -f "$AUTOSTART_FILE" ]; then
   # Systemd owns autostart now; drop the shadow XDG entry so the daemon
   # isn't launched twice at login (single-instance lock would save us,

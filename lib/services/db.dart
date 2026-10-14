@@ -41,12 +41,17 @@ class DatabaseService {
     return '$base/usage.db';
   }
 
+  bool _initialized = false;
+
   void init({String? path}) {
+    if (_initialized) return; // Guard against double-init
+    _initialized = true;
     _ensureSqliteLoaded();
     this.path = path ?? _resolvePath();
     db = sqlite3.open(this.path);
     db.execute('PRAGMA journal_mode=WAL;');
     db.execute('PRAGMA busy_timeout=5000;');
+    db.execute('PRAGMA synchronous=NORMAL;');
     db.execute('''
       CREATE TABLE IF NOT EXISTS sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,7 +155,7 @@ class DatabaseService {
     final rows = db.select('SELECT started_at FROM sessions WHERE id = ?', [id]);
     if (rows.isEmpty) return;
     final started = rows.first['started_at'] as int;
-    final duration = endedAt - started;
+    final duration = endedAt > started ? endedAt - started : 0;
     db.execute(
       'UPDATE sessions SET ended_at = ?, duration_ms = ? WHERE id = ?',
       [endedAt, duration, id],
@@ -162,10 +167,11 @@ class DatabaseService {
 
   int todayTotalMs() {
     final now = DateTime.now();
+    final nowMs = now.millisecondsSinceEpoch;
     final start = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
     final rows = db.select(
-      "SELECT COALESCE(SUM(duration_ms),0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ?;",
-      [start],
+      "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ?;",
+      [nowMs, start],
     );
     return rows.first['t'] as int;
   }
@@ -177,8 +183,8 @@ class DatabaseService {
     final yesterdayEnd = todayStart.millisecondsSinceEpoch - 1;
 
     final rows = db.select(
-      "SELECT COALESCE(SUM(duration_ms),0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ?;",
-      [yesterdayStart, yesterdayEnd],
+      "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ?;",
+      [yesterdayEnd, yesterdayStart, yesterdayEnd],
     );
     return rows.first['t'] as int;
   }
@@ -208,20 +214,33 @@ class DatabaseService {
     return rows.first['t'] as int;
   }
 
-  int getAppTodayMs(String app) {
+  int getAppTodayMs(String app, {List<String>? aliases}) {
     final now = DateTime.now();
+    final nowMs = now.millisecondsSinceEpoch;
     final start = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final appList = (aliases != null && aliases.isNotEmpty)
+        ? (aliases.contains(app) ? aliases : [app, ...aliases])
+        : [app];
+    final placeholders = List.filled(appList.length, '?').join(',');
     final rows = db.select(
-      "SELECT COALESCE(SUM(duration_ms),0) AS t FROM sessions WHERE idle=0 AND app = ? AND started_at >= ?;",
-      [app, start],
+      "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=0 AND app IN ($placeholders) AND started_at >= ?;",
+      [nowMs, ...appList, start],
     );
     return rows.first['t'] as int;
   }
 
-  Map<String, dynamic>? getAppLimit(String app) {
-    final rows = db.select('SELECT * FROM app_limits WHERE app = ?', [app]);
-    if (rows.isEmpty) return null;
-    return rows.first.cast<String, dynamic>();
+  Map<String, dynamic>? getAppLimit(String app, {List<String>? aliases}) {
+    var rows = db.select('SELECT * FROM app_limits WHERE app = ?', [app]);
+    if (rows.isNotEmpty) return rows.first.cast<String, dynamic>();
+
+    if (aliases != null) {
+      for (final alias in aliases) {
+        if (alias == app) continue;
+        rows = db.select('SELECT * FROM app_limits WHERE app = ?', [alias]);
+        if (rows.isNotEmpty) return rows.first.cast<String, dynamic>();
+      }
+    }
+    return null;
   }
 
   List<Map<String, dynamic>> getAllAppLimits() {
@@ -246,12 +265,17 @@ class DatabaseService {
     db.execute('DELETE FROM app_limits WHERE app = ?', [app]);
   }
 
+  Set<String>? _cachedDistractingApps;
+
   Set<String> getDistractingApps() {
+    if (_cachedDistractingApps != null) return _cachedDistractingApps!;
     final rows = db.select('SELECT app FROM distracting_apps');
-    return rows.map((r) => r['app'] as String).toSet();
+    _cachedDistractingApps = rows.map((r) => r['app'] as String).toSet();
+    return _cachedDistractingApps!;
   }
 
   void toggleDistractingApp(String app) {
+    _cachedDistractingApps = null;
     final exists = db.select('SELECT app FROM distracting_apps WHERE app = ?', [app]);
     if (exists.isNotEmpty) {
       db.execute('DELETE FROM distracting_apps WHERE app = ?', [app]);
@@ -260,9 +284,15 @@ class DatabaseService {
     }
   }
 
-  bool isDistractingApp(String app) {
-    final rows = db.select('SELECT app FROM distracting_apps WHERE app = ?', [app]);
-    return rows.isNotEmpty;
+  bool isDistractingApp(String app, {List<String>? aliases}) {
+    final set = getDistractingApps();
+    if (set.contains(app)) return true;
+    if (aliases != null) {
+      for (final a in aliases) {
+        if (set.contains(a)) return true;
+      }
+    }
+    return false;
   }
 
   void startFocusSession(int durationMinutes, {int? totalCycles, int? breakMinutes}) {
@@ -339,16 +369,33 @@ class DatabaseService {
           [endTime, workDurationMins],
         );
 
-        if (currentCycle < totalCycles && breakMins > 0) {
-          // Transition to Break phase
-          final breakEndMs = now + (breakMins * 60 * 1000);
-          final breakSec = breakMins * 60;
-          db.execute(
-            'UPDATE active_focus_state SET is_break = 1, end_time_ms = ?, remaining_seconds = ? WHERE id = 1;',
-            [breakEndMs, breakSec],
-          );
-          final updated = db.select('SELECT * FROM active_focus_state WHERE id = 1');
-          return updated.first.cast<String, dynamic>();
+        if (currentCycle < totalCycles) {
+          if (breakMins > 0) {
+            // Transition to Break phase
+            final breakEndMs = now + (breakMins * 60 * 1000);
+            final breakSec = breakMins * 60;
+            db.execute(
+              'UPDATE active_focus_state SET is_break = 1, end_time_ms = ?, remaining_seconds = ? WHERE id = 1;',
+              [breakEndMs, breakSec],
+            );
+            final updated = db.select('SELECT * FROM active_focus_state WHERE id = 1');
+            return updated.first.cast<String, dynamic>();
+          } else {
+            // No break duration configured: transition directly to next Focus cycle
+            final nextCycle = currentCycle + 1;
+            final nextWorkEndMs = now + (workDurationMins * 60 * 1000);
+            final nextWorkSec = workDurationMins * 60;
+            db.execute(
+              'UPDATE active_focus_state SET is_break = 0, current_cycle = ?, end_time_ms = ?, remaining_seconds = ? WHERE id = 1;',
+              [nextCycle, nextWorkEndMs, nextWorkSec],
+            );
+            db.execute(
+              'INSERT INTO focus_sessions (started_at, duration_minutes, completed) VALUES (?, ?, 0)',
+              [now, workDurationMins],
+            );
+            final updated = db.select('SELECT * FROM active_focus_state WHERE id = 1');
+            return updated.first.cast<String, dynamic>();
+          }
         } else {
           // All cycles completed
           db.execute('DELETE FROM active_focus_state WHERE id = 1');
@@ -406,11 +453,13 @@ class DatabaseService {
   List<Map<String, dynamic>> perAppForDate(DateTime date, {int limit = 10}) {
     final start = DateTime(date.year, date.month, date.day).millisecondsSinceEpoch;
     final end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final effectiveEnd = end < nowMs ? end : nowMs;
 
     return db
         .select(
-          "SELECT app, app_name, SUM(duration_ms) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ? GROUP BY app ORDER BY t DESC LIMIT ?;",
-          [start, end, limit],
+          "SELECT app, app_name, SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ? GROUP BY app ORDER BY t DESC LIMIT ?;",
+          [effectiveEnd, start, end, limit],
         )
         .cast<Map<String, dynamic>>();
   }
@@ -418,10 +467,12 @@ class DatabaseService {
   int getIdleTimeForDate(DateTime date) {
     final start = DateTime(date.year, date.month, date.day).millisecondsSinceEpoch;
     final end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final effectiveEnd = end < nowMs ? end : nowMs;
 
     final rows = db.select(
-      "SELECT COALESCE(SUM(duration_ms), 0) AS t FROM sessions WHERE idle=1 AND started_at >= ? AND started_at <= ?;",
-      [start, end],
+      "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=1 AND started_at >= ? AND started_at <= ?;",
+      [effectiveEnd, start, end],
     );
     return rows.first['t'] as int;
   }
@@ -438,9 +489,12 @@ class DatabaseService {
       final dayStart = day.millisecondsSinceEpoch;
       final dayEnd = DateTime(day.year, day.month, day.day, 23, 59, 59, 999).millisecondsSinceEpoch;
 
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final effectiveEnd = dayEnd < nowMs ? dayEnd : nowMs;
+
       final rows = db.select(
-        "SELECT COALESCE(SUM(duration_ms),0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ?;",
-        [dayStart, dayEnd],
+        "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ?;",
+        [effectiveEnd, dayStart, dayEnd],
       );
       final totalMs = rows.first['t'] as int;
       final dateStr = '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
@@ -451,10 +505,11 @@ class DatabaseService {
 
   int last30DaysTotalMs() {
     final now = DateTime.now();
+    final nowMs = now.millisecondsSinceEpoch;
     final start = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 29)).millisecondsSinceEpoch;
     final rows = db.select(
-      "SELECT COALESCE(SUM(duration_ms),0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ?;",
-      [start],
+      "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ?;",
+      [nowMs, start],
     );
     return rows.first['t'] as int;
   }
@@ -478,15 +533,35 @@ class DatabaseService {
     }
   }
 
+  final Map<String, String> _settingsCache = {};
+  int _lastSettingsFetchMs = 0;
+  static const int _settingsCacheTtlMs = 10000; // 10-second TTL to pick up GUI changes
+
+  void _refreshSettingsCache() {
+    _settingsCache.clear();
+    try {
+      final rows = db.select('SELECT key, value FROM settings');
+      for (final r in rows) {
+        final k = r['key'] as String?;
+        final v = r['value'];
+        if (k != null && v != null) {
+          _settingsCache[k] = v.toString();
+        }
+      }
+    } catch (_) {}
+    _lastSettingsFetchMs = DateTime.now().millisecondsSinceEpoch;
+  }
+
   String getSetting(String key, {String defaultValue = ''}) {
-    final rows = db.select('SELECT value FROM settings WHERE key = ?;', [key]);
-    if (rows.isEmpty || rows.first['value'] == null) {
-      return defaultValue;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastSettingsFetchMs > _settingsCacheTtlMs) {
+      _refreshSettingsCache();
     }
-    return rows.first['value'].toString();
+    return _settingsCache[key] ?? defaultValue;
   }
 
   void setSetting(String key, String value) {
+    _settingsCache[key] = value;
     db.execute(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;',
       [key, value],

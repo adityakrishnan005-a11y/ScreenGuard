@@ -22,7 +22,7 @@ class Tracker {
   String? _currentApp;
   bool? _currentIdle;
   int? _lastTickMs;
-  static const int _resumeGapThresholdMs = 30 * 1000;
+  static const int _resumeGapThresholdMs = 120 * 1000;
 
   Tracker({
     required this.db,
@@ -32,14 +32,39 @@ class Tracker {
     this.idleThresholdMs = 5 * 60 * 1000,
   }) : _backend = backend;
 
-  WindowBackend _selectBackend() {
+  bool _isWaylandRunning() {
     final wayland = Platform.environment['WAYLAND_DISPLAY'];
     final sessionType = Platform.environment['XDG_SESSION_TYPE'];
     if ((wayland != null && wayland.isNotEmpty) || sessionType == 'wayland') {
+      return true;
+    }
+    // Also check for Wayland socket in user runtime directory
+    final runtimeDir = Platform.environment['XDG_RUNTIME_DIR'] ?? '/run/user/${Platform.environment['UID'] ?? '1000'}';
+    try {
+      final dir = Directory(runtimeDir);
+      if (dir.existsSync()) {
+        for (final entity in dir.listSync()) {
+          if (entity.uri.pathSegments.last.startsWith('wayland-')) {
+            return true;
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  WindowBackend _selectBackend() {
+    if (_isWaylandRunning()) {
+      return GnomeWaylandBackend();
+    }
+    final desktop = (Platform.environment['XDG_CURRENT_DESKTOP'] ?? '').toLowerCase();
+    if (desktop.contains('gnome')) {
       return GnomeWaylandBackend();
     }
     return X11Backend();
   }
+
+  int _consecutiveUnknownTicks = 0;
 
   Future<void> run() async {
     _backend ??= _selectBackend();
@@ -47,8 +72,6 @@ class Tracker {
     final debug = Platform.environment['SG_DEBUG'] == '1';
     db.init();
     resolver.init();
-    ProcessSignal.sigterm.watch().listen((_) => _shutdown());
-    ProcessSignal.sigint.watch().listen((_) => _shutdown());
     _lastTickMs = DateTime.now().millisecondsSinceEpoch;
     while (_running) {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -65,6 +88,20 @@ class Tracker {
         final idleMs = await _backend!.getIdleMs();
         final isIdle = idleMs > idleThresholdMs;
         if (debug) stderr.writeln('[tracker] tick app=${w.app} idleMs=$idleMs isIdle=$isIdle');
+
+        // Dynamic auto-recovery: If X11Backend keeps returning 'unknown' on boot,
+        // re-check if the Wayland session has become ready and switch automatically.
+        if (w.app == 'unknown' && _backend is X11Backend) {
+          _consecutiveUnknownTicks++;
+          if (_consecutiveUnknownTicks >= 5 && _isWaylandRunning()) {
+            stderr.writeln('[tracker] Wayland session detected after boot. Switching backend to GnomeWaylandBackend.');
+            _backend = GnomeWaylandBackend();
+            _consecutiveUnknownTicks = 0;
+          }
+        } else {
+          _consecutiveUnknownTicks = 0;
+        }
+
         handle(w.app, w.title, w.pid, isIdle);
       } catch (_) {
         // transient backend error; retry next tick
@@ -89,6 +126,9 @@ class Tracker {
         _currentApp = null;
         _currentIdle = null;
       }
+      // Still run focus-session completion even on excluded windows so Pomodoro
+      // transitions aren't delayed indefinitely while on the lockscreen.
+      _checkFocusSessionCompletion(null);
       return;
     }
     if (_currentId != null && (app != _currentApp || isIdle != _currentIdle)) {
@@ -109,23 +149,49 @@ class Tracker {
       _currentIdle = isIdle;
     }
 
+    // --- Daily reset: do this exactly ONCE per tick, before any check methods ---
+    final nowDay = DateTime.now().day;
+    if (_lastWarnDay != -1 && _lastWarnDay != nowDay) {
+      // Midnight rollover: split open session so usage is cleanly partitioned per day
+      if (_currentId != null && _currentApp != null) {
+        db.closeSession(_currentId!, now);
+        final meta = resolver.resolve(_currentApp!);
+        _currentId = db.openSession(
+          app: _currentApp!,
+          appName: meta.name,
+          title: title,
+          pid: pid,
+          startedAt: now,
+          idle: isIdle,
+        );
+      }
+      _warnedAppsToday.clear();
+      _lockedAppsNotifiedToday.clear();
+      _lastDistractionNotifyMs.clear();
+    }
+    _lastWarnDay = nowDay;
+
+
+    // Fetch focus state once per tick and share it across all checkers (INEFF-1 fix).
+    final activeFocus = db.getActiveFocusState();
+
     if (!isIdle) {
       _checkAppLimit(app, pid: pid);
-      _checkFocusMode(app, pid: pid);
+      _checkFocusMode(app, activeFocus: activeFocus, pid: pid);
       _checkDailyGoal();
     }
-    _checkFocusSessionCompletion();
+    _checkFocusSessionCompletion(activeFocus);
   }
+
 
   // Previous-state tracker for Pomodoro phase transitions
   bool _hadActiveFocusSession = false;
   int _lastFocusDurationMinutes = 0;
-  int _prevCycle = -1;       // -1 = no session
+  int _prevCycle = -1;       // -1 = no active session
   bool _prevIsBreak = false;
 
-  void _checkFocusSessionCompletion() {
-    final activeFocus = db.getActiveFocusState();
-
+  // Accept pre-fetched activeFocus to avoid double DB read per tick (INEFF-1 fix).
+  void _checkFocusSessionCompletion(Map<String, dynamic>? activeFocus) {
     if (activeFocus == null) {
       // Session ended (all cycles done or cancelled)
       if (_hadActiveFocusSession) {
@@ -188,26 +254,32 @@ class Tracker {
 
   final Map<String, int> _lastDistractionNotifyMs = {};
 
-  void _closeAndTerminateApp(String app, {int? pid}) {
-    _backend?.closeActiveWindow();
-    if (pid != null && pid > 100) {
+  // BUG-3 fix: sequence close then SIGTERM with a delay; pid > 1000 guard.
+  Future<void> _closeAndTerminateApp(String app, {int? pid}) async {
+    try {
+      await _backend?.closeActiveWindow();
+    } catch (_) {}
+    if (pid != null && pid > 1000) {
+      // Give the app 1 second to handle the close signal before SIGTERM.
+      await Future.delayed(const Duration(seconds: 1));
       try {
-        Process.run('kill', ['-TERM', '$pid']);
+        await Process.run('kill', ['-TERM', '$pid']);
       } catch (_) {}
     }
   }
 
-  void _checkFocusMode(String app, {int? pid}) {
-    final activeFocus = db.getActiveFocusState();
+  // INEFF-1 fix: accepts pre-fetched activeFocus instead of re-querying DB.
+  void _checkFocusMode(String app, {required Map<String, dynamic>? activeFocus, int? pid}) {
     if (activeFocus == null ||
         (activeFocus['is_paused'] as int? ?? 0) == 1 ||
         (activeFocus['is_break'] as int? ?? 0) == 1) {
       return;
     }
 
-    if (db.isDistractingApp(app)) {
+    final aliases = resolver.getAliases(app);
+    if (db.isDistractingApp(app, aliases: aliases)) {
       final meta = resolver.resolve(app);
-      _closeAndTerminateApp(app, pid: pid);
+      _closeAndTerminateApp(app, pid: pid); // fire-and-forget async is intentional
       final lastMs = _lastDistractionNotifyMs[app] ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
       if (now - lastMs > 10000) {
@@ -231,14 +303,7 @@ class Tracker {
   }
 
   void _checkDailyGoal() {
-    final nowDay = DateTime.now().day;
-    if (_lastWarnDay != nowDay) {
-      _warnedAppsToday.clear();
-      _lockedAppsNotifiedToday.clear();
-      _lastDistractionNotifyMs.clear();
-      _lastWarnDay = nowDay;
-    }
-
+    // BUG-1 fix: daily reset is now done centrally in handle() — removed from here.
     final goalMs = db.getDailyGoalMs();
     if (goalMs <= 0) return;
 
@@ -301,15 +366,9 @@ class Tracker {
   }
 
   void _checkAppLimit(String app, {int? pid}) {
-    final nowDay = DateTime.now().day;
-    if (_lastWarnDay != nowDay) {
-      _warnedAppsToday.clear();
-      _lockedAppsNotifiedToday.clear();
-      _lastDistractionNotifyMs.clear();
-      _lastWarnDay = nowDay;
-    }
-
-    final limitData = db.getAppLimit(app);
+    // BUG-1 fix: daily reset is now done centrally in handle() — removed from here.
+    final aliases = resolver.getAliases(app);
+    final limitData = db.getAppLimit(app, aliases: aliases);
     if (limitData == null || (limitData['enabled'] as int? ?? 1) == 0) return;
 
     final limitMs = (limitData['limit_ms'] as int?) ?? 0;
@@ -317,7 +376,7 @@ class Tracker {
     final effectiveLimitMs = limitMs + extMs;
     if (effectiveLimitMs <= 0) return;
 
-    final todayMs = db.getAppTodayMs(app);
+    final todayMs = db.getAppTodayMs(app, aliases: aliases);
     final meta = resolver.resolve(app);
 
     // 90% Warning Threshold
@@ -334,12 +393,14 @@ class Tracker {
 
     // 100% Limit Reached -> Close app & Launch Lockout Screen
     if (todayMs >= effectiveLimitMs) {
-      _closeAndTerminateApp(app, pid: pid);
+      _closeAndTerminateApp(app, pid: pid); // fire-and-forget async
       if (!_lockedAppsNotifiedToday.contains(app)) {
         _lockedAppsNotifiedToday.add(app);
         _sendNotification(
           'Time\'s Up!',
           'Daily limit reached for ${meta.name}. App was closed.',
+          icon: 'dialog-warning',
+          urgency: 'critical',
           eventKey: 'app_limit',
         );
       }
@@ -354,22 +415,46 @@ class Tracker {
     String body, {
     String icon = 'dialog-warning',
     String eventKey = 'daily_goal_100',
+    String urgency = 'normal',
   }) {
-    if (db.isNotificationsGloballyEnabled() && db.isEventNotificationEnabled(eventKey)) {
+    final notifyGlobal = db.isNotificationsGloballyEnabled();
+    final notifyEvent = db.isEventNotificationEnabled(eventKey);
+    stderr.writeln('[tracker] notify request: eventKey=$eventKey notifyGlobal=$notifyGlobal notifyEvent=$notifyEvent summary="$summary"');
+
+    if (notifyGlobal && notifyEvent) {
       try {
-        Process.run('notify-send', [
-          summary,
-          body,
-          '-i',
-          icon,
-          '-a',
-          'ScreenGuard',
-          '-h',
-          'string:x-canonical-private-synchronous:screenguard-$eventKey',
-          '-h',
-          'string:desktop-entry:screenguard',
-        ]);
-      } catch (_) {}
+        final runtimeDir = Platform.environment['XDG_RUNTIME_DIR'] ?? '/run/user/${Platform.environment['UID'] ?? '1000'}';
+        final dbusBus = Platform.environment['DBUS_SESSION_BUS_ADDRESS'] ?? 'unix:path=$runtimeDir/bus';
+        Process.run(
+          'notify-send',
+          [
+            summary,
+            body,
+            '-u',
+            urgency,
+            '-i',
+            icon,
+            '-a',
+            'ScreenGuard',
+            '-h',
+            'string:desktop-entry:screenguard',
+          ],
+          environment: {
+            ...Platform.environment,
+            'DBUS_SESSION_BUS_ADDRESS': dbusBus,
+          },
+        ).then((res) {
+          if (res.exitCode != 0) {
+            stderr.writeln('[tracker] notify-send exitCode=${res.exitCode} stderr=${res.stderr}');
+          } else {
+            stderr.writeln('[tracker] notify-send sent successfully: "$summary"');
+          }
+        }).catchError((e) {
+          stderr.writeln('[tracker] notify-send error: $e');
+        });
+      } catch (e) {
+        stderr.writeln('[tracker] notify-send sync error: $e');
+      }
     }
 
     if (db.isSoundGloballyEnabled() && db.isEventSoundEnabled(eventKey)) {
@@ -380,11 +465,14 @@ class Tracker {
   }
 
   void _launchLockoutScreen(String app) {
+    // BUG-16 fix: include user-local install path; remove invalid CWD dev path.
     try {
+      final home = Platform.environment['HOME'] ?? '';
       final candidates = [
+        '$home/.local/opt/screenguard/screenguard',   // user-local install (install.sh default)
+        '/usr/local/bin/screenguard',
         '/usr/bin/screenguard',
         '/opt/screenguard/screenguard',
-        '${Directory.current.path}/build/linux/x64/release/bundle/screenguard',
       ];
       for (final c in candidates) {
         if (File(c).existsSync()) {
@@ -395,11 +483,13 @@ class Tracker {
     } catch (_) {}
   }
 
-  void _shutdown() {
+  void stop() {
     if (_currentId != null) {
       db.closeSession(_currentId!, DateTime.now().millisecondsSinceEpoch);
+      _currentId = null;
     }
     _running = false;
-    exit(0);
   }
 }
+
+
