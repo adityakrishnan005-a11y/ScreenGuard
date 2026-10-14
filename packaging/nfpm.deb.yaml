@@ -2,7 +2,6 @@ name: screenguard
 arch: amd64
 platform: linux
 version: 0.1.1~beta5
-release: 1
 section: utils
 priority: optional
 maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
