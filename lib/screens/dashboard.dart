@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/services/app_icon.dart';
 import 'package:screenguard/widgets/usage_bar.dart';
 import 'package:screenguard/widgets/app_list.dart';
 import 'package:screenguard/widgets/day_chart.dart';
@@ -340,6 +341,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ms: (a['t'] as int?) ?? 0,
                       maxMs: maxApp,
                       color: color,
+                      iconPath: AppIconService.resolve(a['app'] as String),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => AppDetailScreen(
                           app: a['app'] as String,

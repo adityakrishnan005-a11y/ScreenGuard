@@ -174,8 +174,44 @@ class AppResolver {
     return result.toList();
   }
 
+  static final RegExp _steamAppPat = RegExp(r'^steam_app_(\d+)$');
+  final Map<String, AppMeta> _steamCache = {};
+
+  /// Steam games surface as `steam_app_<appid>` (Proton sets that WM_CLASS).
+  /// Resolve the real game name from the Steam library manifest and point at
+  /// Steam's per-game icon (`steam_icon_<appid>`). Only positive hits are
+  /// cached — a game installed later resolves on next lookup.
+  AppMeta _resolveSteamApp(String key) {
+    if (_steamCache.containsKey(key)) return _steamCache[key]!;
+    final m = _steamAppPat.firstMatch(key);
+    final appId = m?.group(1) ?? '';
+    var name = 'Steam Game $appId';
+    if (appId.isNotEmpty) {
+      final home = Platform.environment['HOME'] ?? '';
+      for (final root in [
+        '$home/.local/share/Steam',
+        '$home/.steam/steam',
+        '$home/.var/app/com.valvesoftware.Steam/data/Steam',
+      ]) {
+        try {
+          final f = File('$root/steamapps/appmanifest_$appId.acf');
+          if (!f.existsSync()) continue;
+          final content = f.readAsStringSync();
+          final nm = RegExp(r'"name"\s+"([^"]+)"').firstMatch(content);
+          if (nm != null && nm.group(1)!.trim().isNotEmpty) {
+            name = nm.group(1)!.trim();
+            break;
+          }
+        } catch (_) {}
+      }
+      _steamCache[key] = AppMeta(name, 'steam_icon_$appId');
+    }
+    return _steamCache[key] ?? AppMeta(name, 'steam_icon_$appId');
+  }
+
   AppMeta resolve(String rawClass) {
     final key = rawClass.toLowerCase();
+    if (_steamAppPat.hasMatch(key)) return _resolveSteamApp(key);
     if (_overrides.containsKey(key)) return _overrides[key]!;
     if (_cache.containsKey(key)) return _cache[key]!;
     final parts = key.split('.');

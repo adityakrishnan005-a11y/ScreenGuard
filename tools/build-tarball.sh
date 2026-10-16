@@ -43,6 +43,23 @@ else
   echo "[tarball] WARNING: no C compiler — skipping watchdog (install gcc or clang)"
 fi
 
+echo "[tarball] compiling C notification helper..."
+if pkg-config --exists gio-2.0 2>/dev/null; then
+  $CC_BIN -O2 -Wall -Wextra $(pkg-config --cflags --libs gio-2.0) -o "$BUNDLE/screenguard-notify" "$REPO_ROOT/src/notify.c" \
+    && echo "[tarball] notification helper compiled ($(du -h "$BUNDLE/screenguard-notify" | cut -f1))" \
+    || echo "[tarball] WARNING: notification helper build failed"
+fi
+
+echo "[tarball] compiling C process killer..."
+if command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1; then
+  CC_BIN="cc"; command -v cc >/dev/null 2>&1 || CC_BIN="gcc"
+  $CC_BIN -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/screenguard-killer" "$REPO_ROOT/src/killer.c" \
+    && echo "[tarball] process killer compiled ($(du -h "$BUNDLE/screenguard-killer" | cut -f1))" \
+    || echo "[tarball] WARNING: process killer build failed — continuing without it"
+else
+  echo "[tarball] WARNING: no C compiler — skipping process killer (install gcc or clang)"
+fi
+
 echo "[tarball] staging..."
 cp -a "$BUNDLE/." "$STAGE/"
 cp -a "$REPO_ROOT/tools/install.sh" "$STAGE/install.sh"

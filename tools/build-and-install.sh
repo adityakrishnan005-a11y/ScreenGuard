@@ -89,6 +89,34 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3c. Compile C notification helper
+# ---------------------------------------------------------------------------
+log "compiling C notification helper..."
+C_COMPILER="cc"
+command -v cc >/dev/null 2>&1 || C_COMPILER="gcc"
+if pkg-config --exists gio-2.0 2>/dev/null; then
+  $C_COMPILER -O2 -Wall -Wextra $(pkg-config --cflags --libs gio-2.0) -o "$BUNDLE/screenguard-notify" "$REPO_ROOT/src/notify.c" \
+    && log "notification helper compiled successfully" \
+    || log "WARNING: notification helper compilation failed"
+else
+  log "WARNING: pkg-config gio-2.0 not found — skipping screenguard-notify build"
+fi
+
+# ---------------------------------------------------------------------------
+# 3d. Compile C process killer (TERM -> tree KILL -> wineserver -k)
+# ---------------------------------------------------------------------------
+log "compiling C process killer..."
+C_COMPILER="cc"
+command -v cc >/dev/null 2>&1 || C_COMPILER="gcc"
+if command -v "$C_COMPILER" >/dev/null 2>&1; then
+  $C_COMPILER -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/screenguard-killer" "$REPO_ROOT/src/killer.c" \
+    && log "process killer compiled successfully" \
+    || log "WARNING: process killer compilation failed (Close-app falls back to basic kill)"
+else
+  log "WARNING: no C compiler found — skipping screenguard-killer build (Close-app falls back to basic kill)"
+fi
+
+# ---------------------------------------------------------------------------
 # 4. Run install.sh from inside the bundle dir
 # ---------------------------------------------------------------------------
 INSTALL_SH="$REPO_ROOT/tools/install.sh"

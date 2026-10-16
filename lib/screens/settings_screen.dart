@@ -22,9 +22,8 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _SettingsScreenState extends State<SettingsScreen> {
+  int _selectedIndex = 0;
 
   // ── Tab 1: General ─────────────────────────────────────────────────────────
   late bool _notificationsEnabled;
@@ -49,6 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late bool _pomodoroLoopEnabled;
   late int _pomodoroCycles;
   late int _pomodoroBreakMinutes;
+  late bool _focusStrictAutoclose;
 
   // ── Tab 4: Updates & Crash Reports ─────────────────────────────────────
   late UpdateChecker _updateChecker;
@@ -61,21 +61,21 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _isSendingTestCrash = false;
   int _crashCount = 0;
 
+  // ── Tab 5: Data & Storage ──────────────────────────────────────────────
+  bool _dataLoading = true;
+  int _dataFileBytes = 0;
+  int _dataSessionCount = 0;
+  DateTime? _dataOldest;
+  DateTime? _dataNewest;
+  DateTimeRange? _dataRange;
+  final Set<DateTime> _dataDays = {};
+  bool _dataBusy = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 4,
-      vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 3),
-    );
+    _selectedIndex = widget.initialTabIndex.clamp(0, 4);
     _loadSettings();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   void _loadSettings() {
@@ -100,6 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _pomodoroLoopEnabled = widget.db.isPomodoroLoopEnabled();
     _pomodoroCycles = widget.db.getPomodoroCyclesCount();
     _pomodoroBreakMinutes = widget.db.getPomodoroBreakMinutes();
+    _focusStrictAutoclose = widget.db.isFocusStrictAutoclose();
 
     // Tab 4: Updates & Crash Reports
     _updateChecker = UpdateChecker(db: widget.db);
@@ -109,6 +110,27 @@ class _SettingsScreenState extends State<SettingsScreen>
     final crashReporter = CrashReporter();
     _crashCount = crashReporter.getCrashCount();
     _crashReportingEnabled = crashReporter.isReportingEnabled();
+
+    _refreshDataStats();
+  }
+
+  void _refreshDataStats() {
+    setState(() => _dataLoading = true);
+    try {
+      _dataFileBytes = widget.db.databaseFileSize();
+      _dataSessionCount = widget.db.sessionCount();
+      final range = widget.db.sessionDateRange();
+      _dataOldest =
+          range == null ? null : DateTime.fromMillisecondsSinceEpoch(range[0]);
+      _dataNewest =
+          range == null ? null : DateTime.fromMillisecondsSinceEpoch(range[1]);
+    } catch (_) {
+      _dataFileBytes = 0;
+      _dataSessionCount = 0;
+      _dataOldest = null;
+      _dataNewest = null;
+    }
+    if (mounted) setState(() => _dataLoading = false);
   }
 
   Future<void> _pickCustomAudio() async {
@@ -140,32 +162,65 @@ class _SettingsScreenState extends State<SettingsScreen>
       appBar: AppBar(
         title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: [
-            const Tab(icon: Icon(Icons.settings_outlined), text: 'General'),
-            const Tab(icon: Icon(Icons.timer_outlined), text: 'Daily Limits & Pomodoro'),
-            const Tab(icon: Icon(Icons.shield_outlined), text: 'Tracker Daemon'),
-            Tab(
-              icon: Badge(
-                isLabelVisible: _crashCount > 0,
-                label: Text('$_crashCount'),
-                child: const Icon(Icons.system_update_outlined),
-              ),
-              text: 'Updates',
-            ),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildGeneralTab(),
-          _buildLimitsTab(),
-          _buildDaemonTab(),
-          _buildUpdatesTab(),
+          NavigationRail(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+            labelType: NavigationRailLabelType.all,
+            groupAlignment: -1.0,
+            minWidth: 88,
+            destinations: [
+              const NavigationRailDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: Text('General'),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(Icons.timer_outlined),
+                selectedIcon: Icon(Icons.timer),
+                label: Text('Limits &\nPomodoro', textAlign: TextAlign.center),
+              ),
+              NavigationRailDestination(
+                icon: Badge(
+                  isLabelVisible: _crashCount > 0,
+                  label: Text('$_crashCount'),
+                  child: const Icon(Icons.bug_report_outlined),
+                ),
+                selectedIcon: Badge(
+                  isLabelVisible: _crashCount > 0,
+                  label: Text('$_crashCount'),
+                  child: const Icon(Icons.bug_report),
+                ),
+                label: const Text('Diagnostics'),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(Icons.system_update_outlined),
+                selectedIcon: Icon(Icons.system_update),
+                label: Text('Updates'),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(Icons.storage_outlined),
+                selectedIcon: Icon(Icons.storage),
+                label: Text('Data'),
+              ),
+            ],
+          ),
+          const VerticalDivider(thickness: 1, width: 1),
+          Expanded(
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                _buildGeneralTab(),
+                _buildLimitsTab(),
+                _buildDaemonTab(),
+                _buildUpdatesTab(),
+                _buildDataTab(),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -613,6 +668,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           children: [
             _buildPomodoroLoopCard(),
+            const SizedBox(height: 12),
+            _buildFocusBlockingCard(),
             const SizedBox(height: 32),
           ],
         ),
@@ -787,6 +844,62 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  Widget _buildFocusBlockingCard() {
+    return _sectionCard(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          children: [
+            Icon(Icons.block_outlined,
+                size: 22, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Blocked-App Handling',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'What happens when a limit hits 100% or you open a blocked app mid-focus',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          secondary: Icon(
+            Icons.warning_amber_outlined,
+            color: _focusStrictAutoclose
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.primary,
+          ),
+          title: const Text('Strict auto-close',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text(
+            _focusStrictAutoclose
+                ? 'ON: limit & focus apps are closed immediately — unsaved work can be lost'
+                : 'OFF: window is only minimized, with a warning offering save time or manual close',
+          ),
+          value: _focusStrictAutoclose,
+          onChanged: (val) {
+            setState(() => _focusStrictAutoclose = val);
+            widget.db.setFocusStrictAutoclose(val);
+          },
+          contentPadding: EdgeInsets.zero,
+        ),
+      ],
+    );
+  }
+
   Widget _buildStepperRow({
     required IconData icon,
     required String title,
@@ -932,7 +1045,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // TAB 3: Tracker Daemon Management
+  // TAB 3: Diagnostics (Daemon + Crash Reports)
   // ────────────────────────────────────────────────────────────────────────────
 
   Widget _buildDaemonTab() {
@@ -1180,6 +1293,143 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+
+            // ── Crash Reports & Diagnostics Card ───────────────────────────
+            _sectionCard(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _sectionHeader('Crash Reports & Diagnostics'),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.cloud_upload_outlined),
+                  title: const Text(
+                    'Send Anonymous Crash Reports',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Automatically transmit error traces and version info to the developer via Sentry. Strictly anonymous — no personal or screen time data is ever collected.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: _crashReportingEnabled,
+                  onChanged: (val) {
+                    setState(() => _crashReportingEnabled = val);
+                    final reporter = CrashReporter();
+                    reporter.setReportingEnabled(val);
+                  },
+                ),
+                const Divider(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Developer Connection Test',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'For ScreenGuard developers and contributors: sends a test ping to verify the error-telemetry pipeline reaches the developer dashboard. Regular users can safely ignore this.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _isSendingTestCrash
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : OutlinedButton.icon(
+                            onPressed: _crashReportingEnabled
+                                ? () async {
+                                    setState(() => _isSendingTestCrash = true);
+                                    final reporter = CrashReporter();
+                                    final ok = await reporter.sendToSentry(
+                                      level: 'info',
+                                      source: 'gui',
+                                      message: 'Manual test ping from ScreenGuard Settings',
+                                    );
+                                    if (mounted) {
+                                      setState(() => _isSendingTestCrash = false);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            ok
+                                                ? 'Diagnostic ping delivered to developer Sentry dashboard!'
+                                                : 'Failed to deliver ping. Check your internet connection.',
+                                          ),
+                                          backgroundColor: ok ? Colors.teal : Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                : null,
+                            icon: const Icon(Icons.send_rounded, size: 16),
+                            label: const Text('Send Test Ping'),
+                            style: OutlinedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                  ],
+                ),
+                const Divider(height: 24),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: (_crashCount > 0 ? Colors.red : Colors.green)
+                          .withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _crashCount > 0
+                          ? Icons.bug_report_outlined
+                          : Icons.check_circle_outline,
+                      color: _crashCount > 0 ? Colors.red : Colors.green,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    _crashCount > 0
+                        ? '$_crashCount local crash ${_crashCount == 1 ? 'report' : 'reports'} stored'
+                        : 'No local crash reports',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    _crashCount > 0
+                        ? 'View details, stack traces, and report issues on GitHub'
+                        : 'Everything is running smoothly',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: _crashCount > 0
+                      ? FilledButton.tonal(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CrashReportsScreen(),
+                              ),
+                            ).then((_) {
+                              final reporter = CrashReporter();
+                              setState(() {
+                                _crashCount = reporter.getCrashCount();
+                              });
+                            });
+                          },
+                          child: const Text('View Reports'),
+                        )
+                      : null,
+                ),
+              ],
+            ),
+
             const SizedBox(height: 32),
           ],
         ),
@@ -1188,8 +1438,19 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // TAB 4: Updates & Crash Reports
+  // TAB 4: Updates
   // ────────────────────────────────────────────────────────────────────────────
+
+  static const _repoUrl =
+      'https://github.com/adityakrishnan005-a11y/ScreenGuard';
+
+  Future<void> _openUrl(String url) async {
+    try {
+      await Process.run('xdg-open', [url]);
+    } catch (_) {
+      if (mounted) _snack('Could not open browser.');
+    }
+  }
 
   Widget _buildUpdatesTab() {
     final hasUpdate = _updateChecker.hasUpdate;
@@ -1528,143 +1789,421 @@ class _SettingsScreenState extends State<SettingsScreen>
               ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // ── Crash Reports & Diagnostics Card ───────────────────────────
+            // ── About ScreenGuard ──────────────────────────────────────
             _sectionCard(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               children: [
-                _sectionHeader('Crash Reports & Diagnostics'),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.cloud_upload_outlined),
-                  title: const Text(
-                    'Send Anonymous Crash Reports',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  subtitle: const Text(
-                    'Automatically transmit error traces and version info to the developer via Sentry. Strictly anonymous — no personal or screen time data is ever collected.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  value: _crashReportingEnabled,
-                  onChanged: (val) {
-                    setState(() => _crashReportingEnabled = val);
-                    final reporter = CrashReporter();
-                    reporter.setReportingEnabled(val);
-                  },
-                ),
-                const Divider(height: 16),
+                _sectionHeader('About'),
                 Row(
                   children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset(
+                        'assets/icons/screenguard.png',
+                        width: 48,
+                        height: 48,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.shield_rounded,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Developer Connection Test',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                          Text(
+                            'ScreenGuard ${_updateChecker.currentVersion}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 2),
+                          const Text(
+                            'by Aditya Krishnan',
+                            style: TextStyle(fontSize: 12.5),
+                          ),
                           Text(
-                            'Send a ping to verify error telemetry can reach the developer dashboard.',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11.5),
+                            'GPLv3 • free software, your data never leaves this PC',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _isSendingTestCrash
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : OutlinedButton.icon(
-                            onPressed: _crashReportingEnabled
-                                ? () async {
-                                    setState(() => _isSendingTestCrash = true);
-                                    final reporter = CrashReporter();
-                                    final ok = await reporter.sendToSentry(
-                                      level: 'info',
-                                      source: 'gui',
-                                      message: 'Manual test ping from ScreenGuard Settings',
-                                    );
-                                    if (mounted) {
-                                      setState(() => _isSendingTestCrash = false);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            ok
-                                                ? 'Diagnostic ping delivered to developer Sentry dashboard!'
-                                                : 'Failed to deliver ping. Check your internet connection.',
-                                          ),
-                                          backgroundColor: ok ? Colors.teal : Colors.red,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                : null,
-                            icon: const Icon(Icons.send_rounded, size: 16),
-                            label: const Text('Send Test Ping'),
-                            style: OutlinedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ),
                   ],
                 ),
-                const Divider(height: 24),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => _openUrl(_repoUrl),
+                      icon: const Icon(Icons.code_rounded, size: 18),
+                      label: const Text('GitHub'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _openUrl(_repoUrl),
+                      icon: const Icon(Icons.star_outline_rounded, size: 18),
+                      label: const Text('Star'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // TAB 5: Data & Storage
+  // ────────────────────────────────────────────────────────────────────────────
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
+  String _fmtDay(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
+
+  String _fmtBytes(int b) {
+    if (b < 1024) return '$b B';
+    if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
+    return '${(b / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  DateTime _normDay(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  void _snack(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: error ? Colors.red : null,
+      ),
+    );
+  }
+
+  Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final first = _dataOldest ?? DateTime(now.year - 1, 1, 1);
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(first.year, 1, 1),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: _dataRange,
+      helpText: 'Select date range to delete',
+    );
+    if (picked != null && mounted) {
+      setState(() => _dataRange = picked);
+    }
+  }
+
+  Future<void> _pickSingleDay() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime((_dataOldest ?? now).year, 1, 1),
+      lastDate: today,
+      initialDate: today,
+      helpText: 'Select a date to delete',
+    );
+    if (picked != null && mounted) {
+      setState(() => _dataDays.add(_normDay(picked)));
+    }
+  }
+
+  Future<bool> _confirmDelete(String title, String body,
+      {String action = 'Delete'}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _deleteRange() async {
+    final range = _dataRange;
+    if (range == null) return;
+    final label = '${_fmtDay(range.start)} → ${_fmtDay(range.end)}';
+    final ok = await _confirmDelete(
+      'Delete history in range?',
+      'This permanently deletes usage history from $label.\n'
+      'App limits, block-list and settings are kept.',
+    );
+    if (!ok) return;
+    setState(() => _dataBusy = true);
+    int n = 0;
+    try {
+      n = widget.db.deleteSessionsInRange(range.start, range.end);
+    } catch (e) {
+      _snack('Delete failed: $e', error: true);
+    }
+    if (mounted) {
+      setState(() {
+        _dataBusy = false;
+        _dataRange = null;
+      });
+      _refreshDataStats();
+      _snack('Deleted history for $label ($n rows).');
+    }
+  }
+
+  Future<void> _deleteDays() async {
+    if (_dataDays.isEmpty) return;
+    final sorted = _dataDays.toList()..sort();
+    final label = sorted.map(_fmtDay).join(', ');
+    final ok = await _confirmDelete(
+      'Delete ${sorted.length} day${sorted.length == 1 ? '' : 's'}?',
+      'This permanently deletes usage history for:\n$label\n'
+      'App limits, block-list and settings are kept.',
+    );
+    if (!ok) return;
+    setState(() => _dataBusy = true);
+    int n = 0;
+    try {
+      n = widget.db.deleteSessionsOnDates(sorted);
+    } catch (e) {
+      _snack('Delete failed: $e', error: true);
+    }
+    if (mounted) {
+      setState(() {
+        _dataBusy = false;
+        _dataDays.clear();
+      });
+      _refreshDataStats();
+      _snack('Deleted $n rows for selected dates.');
+    }
+  }
+
+  Future<void> _deleteAll() async {
+    final ok = await _confirmDelete(
+      'Delete ALL usage history?',
+      'This permanently deletes every recorded session and focus session.\n'
+      'App limits, block-list and settings are kept.\n'
+      'This cannot be undone.',
+      action: 'Delete everything',
+    );
+    if (!ok) return;
+    setState(() => _dataBusy = true);
+    int n = 0;
+    try {
+      n = widget.db.clearAllUsageData();
+    } catch (e) {
+      _snack('Delete failed: $e', error: true);
+    }
+    if (mounted) {
+      setState(() {
+        _dataBusy = false;
+        _dataRange = null;
+        _dataDays.clear();
+      });
+      _refreshDataStats();
+      _snack('Cleared all usage history ($n rows).');
+    }
+  }
+
+  Widget _buildDataTab() {
+    final daemonService = Provider.of<DaemonService>(context);
+    final sortedDays = _dataDays.toList()..sort();
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 850),
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          children: [
+            _sectionCard(
+              padding: const EdgeInsets.all(20),
+              children: [
+                _sectionHeader('Stored Usage Data'),
+                if (_dataLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else ...[
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.storage_outlined),
+                    title: Text(
+                      '${_fmtBytes(_dataFileBytes)} • $_dataSessionCount sessions',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      _dataOldest == null
+                          ? 'No history recorded yet.\n${widget.db.path}'
+                          : '${_fmtDay(_dataOldest!)} → ${_fmtDay(_dataNewest!)}\n${widget.db.path}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: IconButton(
+                      tooltip: 'Refresh',
+                      onPressed: _dataBusy ? null : _refreshDataStats,
+                      icon: const Icon(Icons.refresh_outlined),
+                    ),
+                  ),
+                  if (daemonService.isRunning)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Tracker is running — deletions apply immediately and new activity keeps being recorded.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            _sectionCard(
+              padding: const EdgeInsets.all(20),
+              children: [
+                _sectionHeader('Delete a Date Range'),
+                const Text(
+                  'Pick a start and end day on the calendar. Every session in that range is removed.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _dataBusy ? null : _pickRange,
+                        icon: const Icon(Icons.date_range_outlined, size: 18),
+                        label: Text(
+                          _dataRange == null
+                              ? 'Select range'
+                              : '${_fmtDay(_dataRange!.start)} → ${_fmtDay(_dataRange!.end)}',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                          backgroundColor: Colors.orange),
+                      onPressed:
+                          (_dataBusy || _dataRange == null) ? null : _deleteRange,
+                      child: _dataBusy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('Delete range'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _sectionCard(
+              padding: const EdgeInsets.all(20),
+              children: [
+                _sectionHeader('Delete Specific Dates'),
+                const Text(
+                  'Add individual days, then delete exactly those days.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _dataBusy ? null : _pickSingleDay,
+                  icon: const Icon(Icons.add_outlined, size: 18),
+                  label: const Text('Add a date'),
+                ),
+                if (sortedDays.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: sortedDays
+                        .map((d) => Chip(
+                              label: Text(_fmtDay(d)),
+                              deleteIcon: const Icon(Icons.close, size: 16),
+                              onDeleted: _dataBusy
+                                  ? null
+                                  : () => setState(() => _dataDays.remove(d)),
+                            ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                          backgroundColor: Colors.orange),
+                      onPressed: _dataBusy ? null : _deleteDays,
+                      child: Text(
+                          'Delete ${sortedDays.length} day${sortedDays.length == 1 ? '' : 's'}'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            _sectionCard(
+              padding: const EdgeInsets.all(20),
+              children: [
+                _sectionHeader('Danger Zone'),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: (_crashCount > 0 ? Colors.red : Colors.green)
-                          .withValues(alpha: 0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
-                      _crashCount > 0
-                          ? Icons.bug_report_outlined
-                          : Icons.check_circle_outline,
-                      color: _crashCount > 0 ? Colors.red : Colors.green,
+                    child: const Icon(
+                      Icons.delete_forever_outlined,
+                      color: Colors.red,
                       size: 20,
                     ),
                   ),
-                  title: Text(
-                    _crashCount > 0
-                        ? '$_crashCount local crash ${_crashCount == 1 ? 'report' : 'reports'} stored'
-                        : 'No local crash reports',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14),
+                  title: const Text(
+                    'Clear all usage history',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
-                  subtitle: Text(
-                    _crashCount > 0
-                        ? 'View details, stack traces, and report issues on GitHub'
-                        : 'Everything is running smoothly',
-                    style: const TextStyle(fontSize: 12),
+                  subtitle: const Text(
+                    'Removes every session and focus session. Limits and settings are kept.',
+                    style: TextStyle(fontSize: 12),
                   ),
-                  trailing: _crashCount > 0
-                      ? FilledButton.tonal(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const CrashReportsScreen(),
-                              ),
-                            ).then((_) {
-                              final reporter = CrashReporter();
-                              setState(() {
-                                _crashCount = reporter.getCrashCount();
-                              });
-                            });
-                          },
-                          child: const Text('View Reports'),
-                        )
-                      : null,
+                  trailing: FilledButton(
+                    style:
+                        FilledButton.styleFrom(backgroundColor: Colors.red),
+                    onPressed: (_dataBusy || _dataSessionCount == 0)
+                        ? null
+                        : _deleteAll,
+                    child: const Text('Clear all'),
+                  ),
                 ),
               ],
             ),
-
             const SizedBox(height: 32),
           ],
         ),

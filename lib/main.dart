@@ -8,6 +8,7 @@ import 'package:screenguard/services/daemon_service.dart';
 import 'package:screenguard/services/theme_service.dart';
 import 'package:screenguard/screens/main_shell.dart';
 import 'package:screenguard/screens/times_up_screen.dart';
+import 'package:screenguard/screens/focus_block_screen.dart';
 
 void main(List<String> args) {
   final crashReporter = CrashReporter();
@@ -34,9 +35,15 @@ void main(List<String> args) {
     final themeService = ThemeService(db);
 
     String? timesUpApp;
+    String? focusBlockApp;
+    int? focusBlockPid;
     for (final arg in args) {
       if (arg.startsWith('--times-up=')) {
         timesUpApp = arg.substring(11).trim();
+      } else if (arg.startsWith('--focus-block=')) {
+        focusBlockApp = arg.substring(14).trim();
+      } else if (arg.startsWith('--pid=')) {
+        focusBlockPid = int.tryParse(arg.substring(6).trim());
       }
     }
 
@@ -48,7 +55,12 @@ void main(List<String> args) {
           ChangeNotifierProvider<DaemonService>.value(value: daemonService),
           ChangeNotifierProvider<ThemeService>.value(value: themeService),
         ],
-        child: MyApp(timesUpApp: timesUpApp, resolver: resolver),
+        child: MyApp(
+          timesUpApp: timesUpApp,
+          focusBlockApp: focusBlockApp,
+          focusBlockPid: focusBlockPid,
+          resolver: resolver,
+        ),
       ),
     );
   }, (error, stackTrace) {
@@ -62,11 +74,15 @@ void main(List<String> args) {
 
 class MyApp extends StatelessWidget {
   final String? timesUpApp;
+  final String? focusBlockApp;
+  final int? focusBlockPid;
   final AppResolver resolver;
 
   const MyApp({
     super.key,
     this.timesUpApp,
+    this.focusBlockApp,
+    this.focusBlockPid,
     required this.resolver,
   });
 
@@ -80,6 +96,14 @@ class MyApp extends StatelessWidget {
       homeWidget = TimesUpScreen(
         app: timesUpApp!,
         appName: meta.name,
+        pid: focusBlockPid,
+      );
+    } else if (focusBlockApp != null && focusBlockApp!.isNotEmpty) {
+      final meta = resolver.resolve(focusBlockApp!);
+      homeWidget = FocusBlockScreen(
+        app: focusBlockApp!,
+        appName: meta.name,
+        pid: focusBlockPid,
       );
     }
 

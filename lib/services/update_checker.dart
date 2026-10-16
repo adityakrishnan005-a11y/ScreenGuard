@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/services/notification_service.dart';
 
 /// Lightweight auto-update checker for ScreenGuard.
 ///
@@ -14,7 +15,7 @@ class UpdateChecker {
   static const String _repoOwner = 'adityakrishnan005-a11y';
   static const String _repoName = 'screenguard';
   static const String _apiBase = 'https://api.github.com/repos/$_repoOwner/$_repoName/releases';
-  static const String _currentVersion = '0.1.1-beta.5';
+  static const String _currentVersion = '0.1.1-beta.6';
 
   final DatabaseService db;
   Timer? _checkTimer;
@@ -286,17 +287,14 @@ class UpdateChecker {
   // ── Notification ───────────────────────────────────────────────────────
 
   void _sendUpdateNotification(String version, bool isBeta) {
-    try {
-      final label = isBeta ? 'Beta Update' : 'Update Available';
-      Process.run('notify-send', [
-        'ScreenGuard — $label',
-        'Version $version is available. Open Settings → Updates to install.',
-        '-i', 'software-update-available',
-        '-a', 'ScreenGuard',
-        '-h', 'string:x-canonical-private-synchronous:screenguard-update',
-        '-h', 'string:desktop-entry:screenguard',
-      ]);
-    } catch (_) {}
+    final label = isBeta ? 'Beta Update' : 'Update Available';
+    NotificationService.show(
+      db: db,
+      eventKey: 'update',
+      title: 'ScreenGuard — $label',
+      body: 'Version $version is available. Open Settings → Updates to install.',
+      icon: 'software-update-available',
+    );
   }
 
   // ── Semantic version comparison ────────────────────────────────────────

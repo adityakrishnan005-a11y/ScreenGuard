@@ -1,7 +1,8 @@
 name: screenguard
 arch: amd64
 platform: linux
-version: 0.1.1~beta5
+version: 0.1.1~beta6
+release: 1
 section: utils
 priority: optional
 maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
@@ -37,6 +38,10 @@ contents:
     dst: /usr/bin/screenguard-daemon
   - src: build/linux/x64/release/bundle/screenguard-watchdog
     dst: /usr/bin/screenguard-watchdog
+  - src: build/linux/x64/release/bundle/screenguard-notify
+    dst: /usr/bin/screenguard-notify
+  - src: build/linux/x64/release/bundle/screenguard-killer
+    dst: /usr/bin/screenguard-killer
   - src: linux/screenguard.service
     dst: /usr/lib/systemd/user/screenguard.service
   - src: linux/50-screenguard.preset

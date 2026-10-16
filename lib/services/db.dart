@@ -124,6 +124,19 @@ class DatabaseService {
         'CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);');
     db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_app ON sessions(app);');
     _migrateCorruptedAppNames();
+    _purgeDesktopShellSessions();
+  }
+
+  /// One-time cleanup for history recorded before desktop-shell windows
+  /// were excluded: those rows are wallpaper/panel focus time, not app use.
+  void _purgeDesktopShellSessions() {
+    try {
+      final placeholders = desktopShellApps.map((_) => '?').join(',');
+      db.execute(
+        'DELETE FROM sessions WHERE app IN ($placeholders);',
+        desktopShellApps,
+      );
+    } catch (_) {}
   }
 
   void _migrateCorruptedAppNames() {
@@ -162,8 +175,24 @@ class DatabaseService {
     );
   }
 
-  static const _excludedAppsFilter =
-      "app NOT IN ('unknown', 'com.example.screenguard', 'screenguard') AND app NOT LIKE 'window:%'";
+  /// Desktop shell components whose windows represent the wallpaper/panel,
+  /// not real app usage. Tracked like `unknown`: excluded from every total
+  /// and never given an open session. Lowercase app ids (backends lowercase).
+  /// NOTE: file managers (caja, nemo, nautilus, pcmanfm) are deliberately NOT
+  /// here — only their desktop-only counterparts — so Files tracking keeps
+  /// working on MATE/Cinnamon/LXQt.
+  static const desktopShellApps = [
+    'xfdesktop', // XFCE desktop
+    'nemo-desktop', // Cinnamon desktop (file manager is `nemo`)
+    'plasmashell', // KDE Plasma shell
+    'gnome-shell', // GNOME shell
+    'mutter', // GNOME compositor
+  ];
+
+  static String get _excludedAppsFilter {
+    final shells = desktopShellApps.map((a) => "'$a'").join(',');
+    return "app NOT IN ('unknown', 'com.example.screenguard', 'screenguard', $shells) AND app NOT LIKE 'window:%'";
+  }
 
   int todayTotalMs() {
     final now = DateTime.now();
@@ -187,14 +216,6 @@ class DatabaseService {
       [yesterdayEnd, yesterdayStart, yesterdayEnd],
     );
     return rows.first['t'] as int;
-  }
-
-  List<Map<String, dynamic>> perAppToday({int limit = 10}) {
-    return perAppForDate(DateTime.now(), limit: limit);
-  }
-
-  List<Map<String, dynamic>> last7Days() {
-    return getWeekData(weekOffset: 0);
   }
 
   List<Map<String, dynamic>> appHistory(String app, {int days = 7}) {
@@ -241,10 +262,6 @@ class DatabaseService {
       }
     }
     return null;
-  }
-
-  List<Map<String, dynamic>> getAllAppLimits() {
-    return db.select('SELECT * FROM app_limits').cast<Map<String, dynamic>>();
   }
 
   void setAppLimit(String app, int limitMs, {bool enabled = true}) {
@@ -430,6 +447,12 @@ class DatabaseService {
     final now = DateTime.now().millisecondsSinceEpoch;
     db.execute('DELETE FROM active_focus_state WHERE id = 1');
     db.execute('UPDATE focus_sessions SET ended_at = ?, completed = 0 WHERE ended_at IS NULL', [now]);
+  }
+
+  Map<String, dynamic>? getLastFocusSession() {
+    final rows = db.select('SELECT * FROM focus_sessions ORDER BY id DESC LIMIT 1');
+    if (rows.isEmpty) return null;
+    return rows.first.cast<String, dynamic>();
   }
 
   int getCompletedFocusSessionsToday() {
@@ -624,6 +647,45 @@ class DatabaseService {
     setSetting('pomodoro_loop_enabled', enabled ? '1' : '0');
   }
 
+  /// Strict focus blocking: when ON, distracting apps are closed + killed
+  /// immediately (legacy behavior). When OFF (default), the window is only
+  /// minimized and a warning screen offers a 1-minute save grace or manual
+  /// close — so unsaved work is never destroyed without consent.
+  bool isFocusStrictAutoclose() {
+    return getSetting('focus_strict_autoclose', defaultValue: '0') == '1';
+  }
+
+  void setFocusStrictAutoclose(bool enabled) {
+    setSetting('focus_strict_autoclose', enabled ? '1' : '0');
+  }
+
+  /// Focus screen app-picker layout: 'grid' (GNOME app-grid style, icon over
+  /// name) or 'list' (checkbox rows with usage time, the default).
+  bool isFocusAppGridLayout() {
+    return getSetting('focus_app_list_layout', defaultValue: 'list') == 'grid';
+  }
+
+  void setFocusAppGridLayout(bool grid) {
+    setSetting('focus_app_list_layout', grid ? 'grid' : 'list');
+  }
+
+  /// 1-minute save grace: timestamp (ms) until which [app] is exempt from
+  /// focus blocking, set from the focus warning screen.
+  int getFocusGraceUntilMs(String app) {
+    return int.tryParse(
+            getSetting('focus_grace_$app', defaultValue: '0')) ??
+        0;
+  }
+
+  void setFocusGraceMinutes(String app, int minutes) {
+    setSetting('focus_grace_$app',
+        '${DateTime.now().millisecondsSinceEpoch + minutes * 60000}');
+  }
+
+  bool isFocusGraceActive(String app) {
+    return DateTime.now().millisecondsSinceEpoch < getFocusGraceUntilMs(app);
+  }
+
   int getPomodoroCyclesCount() {
     final val = getSetting('pomodoro_cycles_count', defaultValue: '4');
     return int.tryParse(val) ?? 4;
@@ -661,5 +723,136 @@ class DatabaseService {
     setSetting('overtime_milestone_index', index.toString());
   }
 
-  void close() => db.dispose();
+  // ── Data management (Settings > Data tab) ──────────────────────────────
+  // Usage-data deletes only. App limits, distracting-app list and all other
+  // settings are intentionally preserved.
+
+  int databaseFileSize() {
+    try {
+      return File(path).statSync().size;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  int sessionCount() {
+    try {
+      final rows = db.select('SELECT COUNT(*) AS c FROM sessions;');
+      return (rows.first['c'] as int?) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Returns [oldestStartedAtMs, newestStartedAtMs], or null when empty.
+  List<int>? sessionDateRange() {
+    try {
+      final rows = db.select(
+        'SELECT MIN(started_at) AS lo, MAX(started_at) AS hi FROM sessions;',
+      );
+      if (rows.isEmpty) return null;
+      final lo = rows.first['lo'] as int?;
+      final hi = rows.first['hi'] as int?;
+      if (lo == null || hi == null) return null;
+      return [lo, hi];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static int dayStartMs(DateTime day) =>
+      DateTime(day.year, day.month, day.day).millisecondsSinceEpoch;
+
+  static int nextDayStartMs(DateTime day) =>
+      DateTime(day.year, day.month, day.day + 1).millisecondsSinceEpoch;
+
+  int _deleteSessionsBetween(int startMs, int endMs) {
+    db.execute(
+      'DELETE FROM sessions WHERE started_at >= ? AND started_at < ?;',
+      [startMs, endMs],
+    );
+    final sessions = db.getUpdatedRows();
+    db.execute(
+      'DELETE FROM focus_sessions WHERE started_at >= ? AND started_at < ?;',
+      [startMs, endMs],
+    );
+    return sessions + db.getUpdatedRows();
+  }
+
+  /// Delete usage history from [from] (inclusive) to [to] (inclusive day).
+  int deleteSessionsInRange(DateTime from, DateTime to) {
+    final start = dayStartMs(from);
+    final end = nextDayStartMs(to);
+    if (end <= start) return 0;
+    final n = _deleteSessionsBetween(start, end);
+    _vacuum();
+    return n;
+  }
+
+  /// Delete usage history on exactly the given calendar days (local time).
+  int deleteSessionsOnDates(Iterable<DateTime> days) {
+    var total = 0;
+    for (final d in days) {
+      total += _deleteSessionsBetween(dayStartMs(d), nextDayStartMs(d));
+    }
+    _vacuum();
+    return total;
+  }
+
+  /// Delete ALL usage history (sessions + focus history + active focus state).
+  /// Limits, block-list and settings are kept.
+  int clearAllUsageData() {
+    db.execute('DELETE FROM sessions;');
+    var n = db.getUpdatedRows();
+    db.execute('DELETE FROM focus_sessions;');
+    n += db.getUpdatedRows();
+    try {
+      db.execute('DELETE FROM active_focus_state;');
+    } catch (_) {}
+    // Stale goal/overtime markers would otherwise suppress future notifications.
+    for (final k in [
+      'last_notified_goal_50',
+      'last_notified_goal_100',
+      'overtime_milestone_date',
+      'overtime_milestone_index',
+    ]) {
+      try {
+        db.execute('DELETE FROM settings WHERE key = ?;', [k]);
+      } catch (_) {}
+    }
+    _vacuum();
+    return n;
+  }
+
+  void _vacuum() {
+    try {
+      db.execute('VACUUM;');
+    } catch (_) {}
+  }
+
+  /// Crash recovery: close sessions left open by a SIGKILL/crash/power loss.
+  /// A new daemon instance never adopts them (its [_currentId] starts null),
+  /// so without this they would inflate every total forever via the live
+  /// `now - started_at` formula. The orphan's real end is unknowable, so its
+  /// duration is capped at [maxDurationMs] (one honest polling interval).
+  /// Returns the number of rows repaired.
+  int closeOrphanedSessions({int maxDurationMs = 10000}) {
+    try {
+      final rows = db.select(
+        'SELECT id, started_at FROM sessions WHERE ended_at IS NULL;',
+      );
+      for (final r in rows) {
+        final id = r['id'] as int;
+        final started = r['started_at'] as int;
+        final ended = started + maxDurationMs;
+        db.execute(
+          'UPDATE sessions SET ended_at = ?, duration_ms = ? WHERE id = ?;',
+          [ended, maxDurationMs, id],
+        );
+      }
+      return rows.length;
+    } catch (_) {
+      return 0;
+    }
+  }
 }

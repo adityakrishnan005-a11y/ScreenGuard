@@ -6,6 +6,9 @@ After=graphical-session.target
 [Service]
 Type=simple
 ExecStart=/usr/bin/screenguard-daemon
+# Our SIGTERM handler exits in milliseconds; a short stop timeout keeps
+# logout/reboot snappy instead of hanging on a wedged daemon.
+TimeoutStopSec=10
 Restart=always
 RestartSec=3
 

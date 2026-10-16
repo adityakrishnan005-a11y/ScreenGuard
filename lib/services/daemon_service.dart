@@ -70,6 +70,21 @@ class DaemonService extends ChangeNotifier {
     return _isRunning;
   }
 
+  static String _xdgAutostartFile() {
+    final home = Platform.environment['HOME'] ?? '';
+    return '$home/.config/autostart/screenguard-daemon.desktop';
+  }
+
+  static Future<bool> _hasSystemdUser() async {
+    try {
+      final res = await Process.run('systemctl', ['--user', 'show-environment'])
+          .timeout(const Duration(seconds: 2));
+      return res.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> checkAutostart() async {
     bool enabled = false;
     try {
@@ -82,6 +97,13 @@ class DaemonService extends ChangeNotifier {
         enabled = false;
       }
     } catch (_) {}
+
+    // Fallback installs (no systemd user session) autostart via XDG entry.
+    if (!enabled) {
+      try {
+        enabled = File(_xdgAutostartFile()).existsSync();
+      } catch (_) {}
+    }
 
     if (_isAutostartEnabled != enabled) {
       _isAutostartEnabled = enabled;
@@ -170,13 +192,35 @@ class DaemonService extends ChangeNotifier {
       if (enable) {
         await Process.run('systemctl', ['--user', 'unmask', 'screenguard.service'])
             .timeout(const Duration(seconds: 4));
-        await Process.run('systemctl', ['--user', 'enable', 'screenguard.service'])
+        final enableRes = await Process.run('systemctl', ['--user', 'enable', 'screenguard.service'])
             .timeout(const Duration(seconds: 4));
+        // No systemd user session (or unit missing): fall back to XDG entry,
+        // mirroring install.sh, so the switch still does what it claims.
+        if (enableRes.exitCode != 0 && !await _hasSystemdUser()) {
+          final f = File(_xdgAutostartFile());
+          f.parent.createSync(recursive: true);
+          f.writeAsStringSync(
+            '[Desktop Entry]\n'
+            'Type=Application\n'
+            'Name=ScreenGuard Daemon\n'
+            'Comment=ScreenGuard background screen time tracker\n'
+            'Exec=${resolveDaemonPath()}\n'
+            'Terminal=false\n'
+            'Hidden=false\n'
+            'NoDisplay=true\n'
+            'X-GNOME-Autostart-enabled=true\n',
+          );
+        }
       } else {
         await Process.run('systemctl', ['--user', 'disable', 'screenguard.service'])
             .timeout(const Duration(seconds: 4));
         await Process.run('systemctl', ['--user', 'mask', 'screenguard.service'])
             .timeout(const Duration(seconds: 4));
+        // Also remove the XDG fallback entry, or the daemon keeps autostarting.
+        try {
+          final f = File(_xdgAutostartFile());
+          if (f.existsSync()) f.deleteSync();
+        } catch (_) {}
       }
     } catch (_) {}
 

@@ -58,7 +58,10 @@ class GnomeWaylandBackend implements WindowBackend {
           final app = match.group(1)!.trim().toLowerCase();
           final title = match.group(2)!.trim();
           final pid = int.tryParse(match.group(3)!);
-          if (app.isNotEmpty && app != 'unknown') {
+          // Synthetic `window:<N>` ids (Shell for unmatched windows, e.g.
+          // Proton games on old extension builds) carry no identity — treat
+          // as a miss so the AT-SPI helper fallback gets a chance.
+          if (app.isNotEmpty && app != 'unknown' && !app.startsWith('window:')) {
             return WindowInfo(
               app: app,
               rawClass: app,

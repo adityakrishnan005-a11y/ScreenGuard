@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/services/notification_service.dart';
 import 'package:screenguard/services/app_resolver.dart';
-import 'package:screenguard/services/sound_service.dart';
+import 'package:screenguard/services/app_icon.dart';
 import 'package:screenguard/screens/settings_screen.dart';
 import 'package:screenguard/utils/format.dart';
 
@@ -163,32 +165,6 @@ class _FocusScreenState extends State<FocusScreen> {
         _remainingSeconds = durationMin * 60;
       });
 
-      // Desktop Notification
-      if (db.isNotificationsGloballyEnabled() && db.isEventNotificationEnabled('focus_mode')) {
-        try {
-          Process.run('notify-send', [
-            '🎉 All Focus Sessions Complete!',
-            'Amazing work! You finished your $durationMin min focus session.',
-            '-i',
-            'dialog-information',
-            '-a',
-            'ScreenGuard',
-            '-h',
-            'string:x-canonical-private-synchronous:screenguard-focus_mode',
-            '-h',
-            'string:desktop-entry:screenguard',
-          ]);
-        } catch (_) {}
-      }
-
-      // Sound cue
-      if (db.isSoundGloballyEnabled() && db.isEventSoundEnabled('focus_mode')) {
-        SoundService.playSound(
-          soundId: db.getSoundTheme(),
-          customPath: db.getCustomSoundPath(),
-        );
-      }
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('🎉 All Focus Sessions Complete! Great work!'),
@@ -204,31 +180,13 @@ class _FocusScreenState extends State<FocusScreen> {
     db.startFocusSession(_selectedDurationMinutes);
     _loadState();
 
-    // Desktop Notification
-    if (db.isNotificationsGloballyEnabled() && db.isEventNotificationEnabled('focus_mode')) {
-      try {
-        Process.run('notify-send', [
-          'Focus Mode Started 🎯',
-          'Focus session active for $_selectedDurationMinutes minutes.',
-          '-i',
-          'dialog-information',
-          '-a',
-          'ScreenGuard',
-          '-h',
-          'string:x-canonical-private-synchronous:screenguard-focus_mode',
-          '-h',
-          'string:desktop-entry:screenguard',
-        ]);
-      } catch (_) {}
-    }
-
-    // Sound cue
-    if (db.isSoundGloballyEnabled() && db.isEventSoundEnabled('focus_mode')) {
-      SoundService.playSound(
-        soundId: db.getSoundTheme(),
-        customPath: db.getCustomSoundPath(),
-      );
-    }
+    NotificationService.show(
+      db: db,
+      eventKey: 'focus_mode',
+      title: 'Focus Mode Started 🎯',
+      body: 'Focus session active for $_selectedDurationMinutes minutes.',
+      icon: 'dialog-information',
+    );
   }
 
   void _pauseSession() {
@@ -236,22 +194,13 @@ class _FocusScreenState extends State<FocusScreen> {
     db.pauseFocusSession();
     _loadState();
 
-    if (db.isNotificationsGloballyEnabled() && db.isEventNotificationEnabled('focus_mode')) {
-      try {
-        Process.run('notify-send', [
-          'Focus Mode Paused ⏸️',
-          'Your focus session is temporarily paused.',
-          '-i',
-          'dialog-information',
-          '-a',
-          'ScreenGuard',
-          '-h',
-          'string:x-canonical-private-synchronous:screenguard-focus_mode',
-          '-h',
-          'string:desktop-entry:screenguard',
-        ]);
-      } catch (_) {}
-    }
+    NotificationService.show(
+      db: db,
+      eventKey: 'focus_mode',
+      title: 'Focus Mode Paused ⏸️',
+      body: 'Your focus session is temporarily paused.',
+      icon: 'dialog-information',
+    );
   }
 
   void _resumeSession() {
@@ -259,29 +208,13 @@ class _FocusScreenState extends State<FocusScreen> {
     db.resumeFocusSession();
     _loadState();
 
-    if (db.isNotificationsGloballyEnabled() && db.isEventNotificationEnabled('focus_mode')) {
-      try {
-        Process.run('notify-send', [
-          'Focus Mode Resumed ▶️',
-          'Focus session resumed.',
-          '-i',
-          'dialog-information',
-          '-a',
-          'ScreenGuard',
-          '-h',
-          'string:x-canonical-private-synchronous:screenguard-focus_mode',
-          '-h',
-          'string:desktop-entry:screenguard',
-        ]);
-      } catch (_) {}
-    }
-
-    if (db.isSoundGloballyEnabled() && db.isEventSoundEnabled('focus_mode')) {
-      SoundService.playSound(
-        soundId: db.getSoundTheme(),
-        customPath: db.getCustomSoundPath(),
-      );
-    }
+    NotificationService.show(
+      db: db,
+      eventKey: 'focus_mode',
+      title: 'Focus Mode Resumed ▶️',
+      body: 'Focus session resumed.',
+      icon: 'dialog-information',
+    );
   }
 
   void _cancelSession() {
@@ -714,11 +647,60 @@ class _FocusScreenState extends State<FocusScreen> {
 
                         const SizedBox(height: 16),
 
+                        // Layout switch: list rows (with usage time) or
+                        // GNOME-style icon grid.
+                        Row(
+                          children: [
+                            const Spacer(),
+                            const Text('Grid layout',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 6),
+                            Switch(
+                              value: db.isFocusAppGridLayout(),
+                              activeColor: Colors.teal,
+                              onChanged: (val) =>
+                                  setState(() => db.setFocusAppGridLayout(val)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+
                         if (filteredApps.isEmpty)
                           const Padding(
                             padding: EdgeInsets.all(16.0),
                             child: Text('No matching apps found.',
                                 style: TextStyle(color: Colors.grey)),
+                          )
+                        else if (db.isFocusAppGridLayout())
+                          // Grid layout: GNOME app-grid style — icon above
+                          // the name, selection shown by a checkbox badge.
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 110,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 6,
+                              childAspectRatio: 0.92,
+                            ),
+                            itemCount: filteredApps.length,
+                            itemBuilder: (context, index) {
+                              final item = filteredApps[index];
+                              return _AppGridTile(
+                                app: item['app'] as String,
+                                name: item['app_name'] as String? ??
+                                    item['app'] as String,
+                                selected: _distractingApps
+                                    .contains(item['app'] as String),
+                                onTap: () {
+                                  db.toggleDistractingApp(item['app'] as String);
+                                  _loadState();
+                                },
+                              );
+                            },
                           )
                         else
                           ListView.builder(
@@ -759,6 +741,112 @@ class _FocusScreenState extends State<FocusScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One tile in the grid app picker: themed icon over the app name, GNOME
+/// app-grid style. Selection is a red check badge in the icon's corner.
+class _AppGridTile extends StatelessWidget {
+  final String app;
+  final String name;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AppGridTile({
+    required this.app,
+    required this.name,
+    required this.selected,
+    required this.onTap,
+  });
+
+  Widget _icon() {
+    final path = AppIconService.resolve(app);
+    final Widget image;
+    if (path == null) {
+      image = Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.bold,
+            color: Colors.teal,
+          ),
+        ),
+      );
+    } else if (AppIconService.isSvg(path)) {
+      image = SvgPicture.file(File(path), fit: BoxFit.contain);
+    } else {
+      image = Image.file(File(path), fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Center(
+                child: Text(
+                  name.isNotEmpty ? name[0].toUpperCase() : '?',
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.teal,
+                  ),
+                ),
+              ));
+    }
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.teal.withValues(alpha: selected ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: image,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _icon(),
+                if (selected)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check,
+                          size: 12, color: Colors.white),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? Colors.redAccent : null,
+              ),
+            ),
+          ],
         ),
       ),
     );

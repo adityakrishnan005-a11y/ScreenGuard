@@ -74,6 +74,11 @@ void main() async {
 
     ProcessSignal.sigterm.watch().listen((_) => onShutdown());
     ProcessSignal.sigint.watch().listen((_) => onShutdown());
+    // SIGHUP: session logout kills detached (non-systemd) daemons via hangup.
+    // Without this, every logout looks like a crash.
+    try {
+      ProcessSignal.sighup.watch().listen((_) => onShutdown());
+    } catch (_) {}
 
 
     await tracker.run();

@@ -5,7 +5,8 @@ import 'package:screenguard/services/backend/window_backend.dart';
 import 'package:screenguard/services/backend/x11_backend.dart';
 import 'package:screenguard/services/backend/gnome_wayland_backend.dart';
 import 'package:screenguard/services/app_resolver.dart';
-import 'package:screenguard/services/sound_service.dart';
+import 'package:screenguard/services/notification_service.dart';
+import 'package:screenguard/services/app_killer.dart';
 import 'package:screenguard/utils/format.dart';
 
 class Tracker {
@@ -14,8 +15,6 @@ class Tracker {
   final Duration pollInterval;
   final int idleThresholdMs;
   WindowBackend? _backend;
-
-  WindowBackend? get backend => _backend;
 
   bool _running = true;
   int? _currentId;
@@ -72,6 +71,13 @@ class Tracker {
     final debug = Platform.environment['SG_DEBUG'] == '1';
     db.init();
     resolver.init();
+    // Repair sessions orphaned by a previous SIGKILL/crash (see db.dart).
+    final orphans = db.closeOrphanedSessions(
+      maxDurationMs: pollInterval.inMilliseconds * 2,
+    );
+    if (orphans > 0 && debug) {
+      stderr.writeln('[tracker] closed $orphans orphaned session(s)');
+    }
     _lastTickMs = DateTime.now().millisecondsSinceEpoch;
     while (_running) {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -128,8 +134,15 @@ class Tracker {
       }
       // Still run focus-session completion even on excluded windows so Pomodoro
       // transitions aren't delayed indefinitely while on the lockscreen.
-      _checkFocusSessionCompletion(null);
+      final activeFocus = db.getActiveFocusState();
+      _checkFocusSessionCompletion(activeFocus);
       return;
+    }
+    // Desktop wallpaper/panel focus counts as idle time, not app usage.
+    // (File managers — thunar, nemo, dolphin, nautilus — are NOT in
+    // desktopShellApps and keep tracking as normal active apps.)
+    if (DatabaseService.desktopShellApps.contains(app)) {
+      isIdle = true;
     }
     if (_currentId != null && (app != _currentApp || isIdle != _currentIdle)) {
       db.closeSession(_currentId!, now);
@@ -176,7 +189,8 @@ class Tracker {
     final activeFocus = db.getActiveFocusState();
 
     if (!isIdle) {
-      _checkAppLimit(app, pid: pid);
+      final inBreak = (activeFocus?['is_break'] as int? ?? 0) == 1;
+      _checkAppLimit(app, pid: pid, inBreak: inBreak);
       _checkFocusMode(app, activeFocus: activeFocus, pid: pid);
       _checkDailyGoal();
     }
@@ -193,16 +207,20 @@ class Tracker {
   // Accept pre-fetched activeFocus to avoid double DB read per tick (INEFF-1 fix).
   void _checkFocusSessionCompletion(Map<String, dynamic>? activeFocus) {
     if (activeFocus == null) {
-      // Session ended (all cycles done or cancelled)
+      // Session ended: check if it completed naturally or was cancelled
       if (_hadActiveFocusSession) {
         _hadActiveFocusSession = false;
-        final totalCycles = _prevCycle > 0 ? _prevCycle : 1;
-        _sendNotification(
-          '🎉 All Focus Sessions Complete!',
-          'Amazing work! You finished all $totalCycles focus ${totalCycles == 1 ? "session" : "sessions"} of $_lastFocusDurationMinutes min.',
-          icon: 'dialog-information',
-          eventKey: 'focus_mode',
-        );
+        final lastSession = db.getLastFocusSession();
+        final wasCompleted = lastSession != null && (lastSession['completed'] as int? ?? 0) == 1;
+        if (wasCompleted) {
+          final totalCycles = _prevCycle > 0 ? _prevCycle : 1;
+          _sendNotification(
+            '🎉 All Focus Sessions Complete!',
+            'Amazing work! You finished all $totalCycles focus ${totalCycles == 1 ? "session" : "sessions"} of $_lastFocusDurationMinutes min.',
+            icon: 'dialog-information',
+            eventKey: 'focus_mode',
+          );
+        }
       }
       _prevCycle = -1;
       _prevIsBreak = false;
@@ -255,17 +273,10 @@ class Tracker {
   final Map<String, int> _lastDistractionNotifyMs = {};
 
   // BUG-3 fix: sequence close then SIGTERM with a delay; pid > 1000 guard.
+  // Now escalates (WM_DELETE → TERM → KILL → tree) via AppKiller so Proton
+  // games actually die instead of shrugging off a lone SIGTERM.
   Future<void> _closeAndTerminateApp(String app, {int? pid}) async {
-    try {
-      await _backend?.closeActiveWindow();
-    } catch (_) {}
-    if (pid != null && pid > 1000) {
-      // Give the app 1 second to handle the close signal before SIGTERM.
-      await Future.delayed(const Duration(seconds: 1));
-      try {
-        await Process.run('kill', ['-TERM', '$pid']);
-      } catch (_) {}
-    }
+    await AppKiller.close(app: app, pid: pid, backend: _backend);
   }
 
   // INEFF-1 fix: accepts pre-fetched activeFocus instead of re-querying DB.
@@ -278,19 +289,78 @@ class Tracker {
 
     final aliases = resolver.getAliases(app);
     if (db.isDistractingApp(app, aliases: aliases)) {
+      // 1-minute save grace from the warning screen: leave the app alone.
+      if (db.isFocusGraceActive(app)) {
+        _graceWasActive.add(app);
+        return;
+      }
+      // Grace just expired while the app is still focused: warn immediately
+      // instead of waiting out the re-show throttle.
+      if (_graceWasActive.remove(app)) {
+        _lastFocusWarnMs[app] = 0;
+      }
       final meta = resolver.resolve(app);
-      _closeAndTerminateApp(app, pid: pid); // fire-and-forget async is intentional
-      final lastMs = _lastDistractionNotifyMs[app] ?? 0;
+
+      // Strict mode (opt-in setting): legacy instant close + kill.
+      if (db.isFocusStrictAutoclose()) {
+        _closeAndTerminateApp(app, pid: pid); // fire-and-forget async is intentional
+        final lastMs = _lastDistractionNotifyMs[app] ?? 0;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (now - lastMs > 10000) {
+          _lastDistractionNotifyMs[app] = now;
+          _sendNotification(
+            'Focus Mode Active 🎯',
+            '${meta.name} was closed during your focus session.',
+            eventKey: 'focus_mode',
+          );
+        }
+        return;
+      }
+
+      // Default: never destroy unsaved work. Minimize only, then show the
+      // persistent warning screen — relentless: re-shown every few seconds
+      // while the app stays focused, so dismissal forces a real decision.
+      unawaited(_minimizeOnly());
       final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - lastMs > 10000) {
-        _lastDistractionNotifyMs[app] = now;
+      if (now - (_lastFocusWarnMs[app] ?? 0) > 5000) {
+        _lastFocusWarnMs[app] = now;
         _sendNotification(
           'Focus Mode Active 🎯',
-          '${meta.name} was closed during your focus session.',
+          '${meta.name} was minimized — open ScreenGuard to close it or take 1 minute to save.',
           eventKey: 'focus_mode',
         );
+        _launchFocusBlockScreen(app, pid);
       }
     }
+  }
+
+  final Map<String, int> _lastFocusWarnMs = {};
+  final Set<String> _graceWasActive = {};
+
+  Future<void> _minimizeOnly() async {
+    try {
+      await _backend?.minimizeActiveWindow();
+    } catch (_) {}
+  }
+
+  void _launchFocusBlockScreen(String app, int? pid) {
+    try {
+      final home = Platform.environment['HOME'] ?? '';
+      final candidates = [
+        '$home/.local/opt/screenguard/screenguard',
+        '/usr/local/bin/screenguard',
+        '/usr/bin/screenguard',
+        '/opt/screenguard/screenguard',
+      ];
+      for (final c in candidates) {
+        if (File(c).existsSync()) {
+          final args = ['--focus-block=$app'];
+          if (pid != null) args.add('--pid=$pid');
+          Process.run(c, args);
+          return;
+        }
+      }
+    } catch (_) {}
   }
 
   final Set<String> _warnedAppsToday = {};
@@ -365,8 +435,11 @@ class Tracker {
     }
   }
 
-  void _checkAppLimit(String app, {int? pid}) {
+  void _checkAppLimit(String app, {int? pid, bool inBreak = false}) {
     // BUG-1 fix: daily reset is now done centrally in handle() — removed from here.
+    // Pomodoro breaks pause limit enforcement entirely: no warnings, no
+    // lockouts while on break. Resumes automatically when work restarts.
+    if (inBreak) return;
     final aliases = resolver.getAliases(app);
     final limitData = db.getAppLimit(app, aliases: aliases);
     if (limitData == null || (limitData['enabled'] as int? ?? 1) == 0) return;
@@ -391,24 +464,48 @@ class Tracker {
       }
     }
 
-    // 100% Limit Reached -> Close app & Launch Lockout Screen
+    // 100% Limit Reached -> Lockout Screen (+ optional strict close)
     if (todayMs >= effectiveLimitMs) {
-      _closeAndTerminateApp(app, pid: pid); // fire-and-forget async
-      if (!_lockedAppsNotifiedToday.contains(app)) {
-        _lockedAppsNotifiedToday.add(app);
-        _sendNotification(
-          'Time\'s Up!',
-          'Daily limit reached for ${meta.name}. App was closed.',
-          icon: 'dialog-warning',
-          urgency: 'critical',
-          eventKey: 'app_limit',
-        );
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      if (db.isFocusStrictAutoclose()) {
+        _closeAndTerminateApp(app, pid: pid); // fire-and-forget async
+        if (!_lockedAppsNotifiedToday.contains(app)) {
+          _lockedAppsNotifiedToday.add(app);
+          _sendNotification(
+            'Time\'s Up!',
+            'Daily limit reached for ${meta.name}. App was closed.',
+            icon: 'dialog-warning',
+            urgency: 'critical',
+            eventKey: 'app_limit',
+          );
+        }
+      } else {
+        // Default: never destroy unsaved work. Minimize only; the lockout
+        // screen offers +15 min, edit, or explicit close.
+        unawaited(_minimizeOnly());
+        if (!_lockedAppsNotifiedToday.contains(app)) {
+          _lockedAppsNotifiedToday.add(app);
+          _sendNotification(
+            'Time\'s Up!',
+            'Daily limit reached for ${meta.name}. Window was minimized — nothing was closed.',
+            icon: 'dialog-warning',
+            urgency: 'critical',
+            eventKey: 'app_limit',
+          );
+        }
       }
-      _launchLockoutScreen(app);
+      // (Re-)show the lockout screen relentlessly — every few seconds per
+      // app while over limit — so dismissal forces a real decision.
+      if (nowMs - (_lastLimitScreenMs[app] ?? 0) > 5000) {
+        _lastLimitScreenMs[app] = nowMs;
+        _launchLockoutScreen(app, pid);
+      }
     } else {
       _lockedAppsNotifiedToday.remove(app);
     }
   }
+
+  final Map<String, int> _lastLimitScreenMs = {};
 
   void _sendNotification(
     String summary,
@@ -417,54 +514,17 @@ class Tracker {
     String eventKey = 'daily_goal_100',
     String urgency = 'normal',
   }) {
-    final notifyGlobal = db.isNotificationsGloballyEnabled();
-    final notifyEvent = db.isEventNotificationEnabled(eventKey);
-    stderr.writeln('[tracker] notify request: eventKey=$eventKey notifyGlobal=$notifyGlobal notifyEvent=$notifyEvent summary="$summary"');
-
-    if (notifyGlobal && notifyEvent) {
-      try {
-        final runtimeDir = Platform.environment['XDG_RUNTIME_DIR'] ?? '/run/user/${Platform.environment['UID'] ?? '1000'}';
-        final dbusBus = Platform.environment['DBUS_SESSION_BUS_ADDRESS'] ?? 'unix:path=$runtimeDir/bus';
-        Process.run(
-          'notify-send',
-          [
-            summary,
-            body,
-            '-u',
-            urgency,
-            '-i',
-            icon,
-            '-a',
-            'ScreenGuard',
-            '-h',
-            'string:desktop-entry:screenguard',
-          ],
-          environment: {
-            ...Platform.environment,
-            'DBUS_SESSION_BUS_ADDRESS': dbusBus,
-          },
-        ).then((res) {
-          if (res.exitCode != 0) {
-            stderr.writeln('[tracker] notify-send exitCode=${res.exitCode} stderr=${res.stderr}');
-          } else {
-            stderr.writeln('[tracker] notify-send sent successfully: "$summary"');
-          }
-        }).catchError((e) {
-          stderr.writeln('[tracker] notify-send error: $e');
-        });
-      } catch (e) {
-        stderr.writeln('[tracker] notify-send sync error: $e');
-      }
-    }
-
-    if (db.isSoundGloballyEnabled() && db.isEventSoundEnabled(eventKey)) {
-      final soundTheme = db.getSoundTheme();
-      final customPath = db.getCustomSoundPath();
-      SoundService.playSound(soundId: soundTheme, customPath: customPath);
-    }
+    NotificationService.show(
+      db: db,
+      eventKey: eventKey,
+      title: summary,
+      body: body,
+      icon: icon,
+      urgency: urgency,
+    );
   }
 
-  void _launchLockoutScreen(String app) {
+  void _launchLockoutScreen(String app, int? pid) {
     // BUG-16 fix: include user-local install path; remove invalid CWD dev path.
     try {
       final home = Platform.environment['HOME'] ?? '';
@@ -476,7 +536,9 @@ class Tracker {
       ];
       for (final c in candidates) {
         if (File(c).existsSync()) {
-          Process.run(c, ['--times-up=$app']);
+          final args = ['--times-up=$app'];
+          if (pid != null) args.add('--pid=$pid');
+          Process.run(c, args);
           return;
         }
       }

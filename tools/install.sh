@@ -54,6 +54,14 @@ daemon_pids() { # $1 = DAEMON_BIN, $2 = bin-symlink path
       echo "$pid"
       continue
     fi
+    # Catch stray daemons from OTHER installs (e.g. a distro package at
+    # /usr/bin shadowing this prefix): same binary name, different path.
+    # Without this, the stale daemon keeps the single-instance lock and the
+    # freshly installed one silently exits while we report success.
+    if [ -n "$exe" ] && [ "${exe##*/}" = "screenguard-daemon" ]; then
+      echo "$pid"
+      continue
+    fi
     while IFS= read -r arg; do
       if [ "$arg" = "$want1" ] || [ "$arg" = "$want2" ]; then
         echo "$pid"
@@ -84,6 +92,8 @@ APP_DIR="$PREFIX/opt/screenguard"
 BIN_DIR="$PREFIX/bin"
 DAEMON_BIN="$APP_DIR/screenguard-daemon"
 WATCHDOG_BIN="$APP_DIR/screenguard-watchdog"
+NOTIFY_BIN="$APP_DIR/screenguard-notify"
+KILLER_BIN="$APP_DIR/screenguard-killer"
 
 if [ "$SYSTEM" -eq 1 ]; then
   UNIT_DIR="/etc/systemd/user"
@@ -107,7 +117,7 @@ do_uninstall() {
   for _pid in $(daemon_pids "$DAEMON_BIN" "$BIN_DIR/screenguard-daemon"); do
     kill -9 "$_pid" 2>/dev/null || true
   done
-  rm -f "$UNIT_FILE" "$AUTOSTART_FILE" "$BIN_DIR/screenguard" "$BIN_DIR/screenguard-daemon"
+  rm -f "$UNIT_FILE" "$AUTOSTART_FILE" "$BIN_DIR/screenguard" "$BIN_DIR/screenguard-daemon" "$BIN_DIR/screenguard-watchdog" "$BIN_DIR/screenguard-notify" "$BIN_DIR/screenguard-killer"
   rm -rf "$APP_DIR"
   if command -v systemctl >/dev/null 2>&1 && [ "$SYSTEM" -eq 0 ]; then
     systemctl --user daemon-reload 2>/dev/null || true
@@ -169,14 +179,20 @@ log "installing bundle to $APP_DIR ..."
 mkdir -p "$APP_DIR" "$BIN_DIR"
 cp -a "$SRC_DIR/screenguard" "$SRC_DIR/screenguard-daemon" "$APP_DIR/"
 [ -f "$SRC_DIR/screenguard-watchdog" ] && cp -a "$SRC_DIR/screenguard-watchdog" "$APP_DIR/" && chmod +x "$APP_DIR/screenguard-watchdog"
+[ -f "$SRC_DIR/screenguard-notify" ] && cp -a "$SRC_DIR/screenguard-notify" "$APP_DIR/" && chmod +x "$APP_DIR/screenguard-notify"
+[ -f "$SRC_DIR/screenguard-killer" ] && cp -a "$SRC_DIR/screenguard-killer" "$APP_DIR/" && chmod +x "$APP_DIR/screenguard-killer"
 [ -d "$SRC_DIR/data" ] && cp -a "$SRC_DIR/data" "$APP_DIR/"
 [ -d "$SRC_DIR/lib" ]  && cp -a "$SRC_DIR/lib"  "$APP_DIR/"
 chmod +x "$APP_DIR/screenguard" "$APP_DIR/screenguard-daemon"
 ln -sf "$APP_DIR/screenguard" "$BIN_DIR/screenguard"
 ln -sf "$APP_DIR/screenguard-daemon" "$BIN_DIR/screenguard-daemon"
 [ -f "$WATCHDOG_BIN" ] && ln -sf "$WATCHDOG_BIN" "$BIN_DIR/screenguard-watchdog"
+[ -f "$NOTIFY_BIN" ] && ln -sf "$NOTIFY_BIN" "$BIN_DIR/screenguard-notify"
+[ -f "$KILLER_BIN" ] && ln -sf "$KILLER_BIN" "$BIN_DIR/screenguard-killer"
 log "binaries linked: $BIN_DIR/screenguard, $BIN_DIR/screenguard-daemon"
 [ -f "$WATCHDOG_BIN" ] && log "watchdog linked: $BIN_DIR/screenguard-watchdog"
+[ -f "$NOTIFY_BIN" ] && log "notification helper linked: $BIN_DIR/screenguard-notify"
+[ -f "$KILLER_BIN" ] && log "process killer linked: $BIN_DIR/screenguard-killer"
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) log "NOTE: $BIN_DIR is not on your PATH. Add this to ~/.bashrc:  export PATH=\"\$PATH:$BIN_DIR\"" ;;
@@ -246,6 +262,7 @@ After=graphical-session.target
 [Service]
 Type=simple
 ExecStart=$DAEMON_BIN
+TimeoutStopSec=10
 Restart=always
 RestartSec=3
 

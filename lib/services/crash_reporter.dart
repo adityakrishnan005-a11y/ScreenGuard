@@ -206,11 +206,15 @@ class CrashReporter {
   /// [error] is the error message or exception.toString().
   /// [stackTrace] is the stack trace string (truncated to 50 lines).
   /// [extra] is optional additional context.
+  /// [reportToSentry]: real crashes default to true. Routine lifecycle noise
+  /// (e.g. unclean shutdown after logout/reboot) must pass false, or every
+  /// user logout floods Sentry with non-actionable error events.
   void recordCrash({
     required String source,
     required String error,
     String? stackTrace,
     Map<String, dynamic>? extra,
+    bool reportToSentry = true,
   }) {
     try {
       final now = DateTime.now();
@@ -248,8 +252,9 @@ class CrashReporter {
       // Auto-cleanup old logs
       _cleanupOldLogs();
 
-      // Automatically send to Sentry in background if enabled
-      if (isReportingEnabled()) {
+      // Automatically send real crashes to Sentry in background if enabled.
+      // Lifecycle noise (reportToSentry: false) stays local-only.
+      if (reportToSentry && isReportingEnabled()) {
         sendToSentry(
           level: 'error',
           source: source,
@@ -264,11 +269,14 @@ class CrashReporter {
   }
 
   /// Record an unclean shutdown (daemon didn't exit cleanly).
+  /// Local log only — logout/reboot kills routinely cause these and must
+  /// never reach Sentry, or normal user behavior floods the error stream.
   void recordUncleanShutdown() {
     recordCrash(
       source: 'daemon',
       error: 'Unclean shutdown detected — daemon did not exit gracefully on previous run.',
       extra: {'type': 'unclean_shutdown'},
+      reportToSentry: false,
     );
   }
 
@@ -412,25 +420,6 @@ class CrashReporter {
     } catch (_) {}
   }
 
-  /// Read the last heartbeat timestamp (ms since epoch), or null if unavailable.
-  int? readHeartbeat() {
-    try {
-      final file = File('$_dataDir/daemon_heartbeat');
-      if (!file.existsSync()) return null;
-      return int.tryParse(file.readAsStringSync().trim());
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Check if the daemon heartbeat is stale (older than [threshold]).
-  bool isDaemonHeartbeatStale({Duration threshold = const Duration(minutes: 10)}) {
-    final lastBeat = readHeartbeat();
-    if (lastBeat == null) return true;
-    final age = DateTime.now().millisecondsSinceEpoch - lastBeat;
-    return age > threshold.inMilliseconds;
-  }
-
   // ── Private helpers ─────────────────────────────────────────────────────
 
   void _cleanupOldLogs() {
@@ -477,7 +466,7 @@ class CrashReporter {
   }
 
   String _getAppVersion() {
-    return const String.fromEnvironment('APP_VERSION', defaultValue: '0.1.1-beta.5');
+    return const String.fromEnvironment('APP_VERSION', defaultValue: '0.1.1-beta.6');
   }
 
   static String _truncate(String s, int maxLen) {
