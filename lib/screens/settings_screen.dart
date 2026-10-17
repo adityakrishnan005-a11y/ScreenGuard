@@ -1639,17 +1639,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         FilledButton.icon(
                           onPressed: () async {
                             setState(() => _isInstallingUpdate = true);
-                            final ok =
-                                await _updateChecker.downloadAndInstall(latestVersion);
+                            final result = await _updateChecker
+                                .downloadAndInstall(latestVersion);
                             if (mounted) {
                               setState(() => _isInstallingUpdate = false);
-                              if (ok) {
+                              if (result.success) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                      'Update installed! Restart ScreenGuard to use the new version.',
+                                      result.note.isEmpty
+                                          ? 'Update installed! Restart ScreenGuard to use the new version.'
+                                          : '${result.note} restart ScreenGuard to use the new version.',
                                     ),
-                                    duration: Duration(seconds: 5),
+                                    duration: const Duration(seconds: 5),
+                                  ),
+                                );
+                              } else if (result.note.isNotEmpty) {
+                                await showDialog<void>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('One manual step needed'),
+                                    content: SingleChildScrollView(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Automatic installation was not possible. Run this in a terminal (select the text to copy):',
+                                            style: TextStyle(fontSize: 13),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          SelectableText(
+                                            result.note,
+                                            style: const TextStyle(
+                                              fontFamily: 'monospace',
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx),
+                                        child: const Text('OK'),
+                                      ),
+                                    ],
                                   ),
                                 );
                               } else {

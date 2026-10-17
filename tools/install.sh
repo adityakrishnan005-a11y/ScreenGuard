@@ -136,10 +136,10 @@ for f in screenguard screenguard-daemon; do
   [ -x "$SRC_DIR/$f" ] || die "'$f' not found next to $0 — run this script from the extracted tarball directory."
 done
 
-# --- 1b. Stop any running daemon first. Overwriting a running executable
-# fails with "Text file busy", so updates (re-runs) must stop it before
-# copying. State is captured so it can be restarted afterwards.
-# (Matching helper daemon_pids() is defined near the top of this script.)
+# --- 1b. Capture autostart state BEFORE the migration sweep below stops
+# all instances, so a previously running daemon can be restarted after the
+# files are replaced. (Matching helper daemon_pids() is defined near the
+# top of this script.)
 DAEMON_WAS_RUNNING=0
 if [ -n "$(daemon_pids "$DAEMON_BIN" "$BIN_DIR/screenguard-daemon")" ]; then
   DAEMON_WAS_RUNNING=1
@@ -152,6 +152,22 @@ if [ -f "$UNIT_FILE" ] && command -v systemctl >/dev/null 2>&1; then
     systemctl --user is-enabled --quiet screenguard.service 2>/dev/null && UNIT_WAS_ENABLED=1 || true
   fi
 fi
+
+# --- 1c. Migration sweep. Stops watchdogs, daemons and GUIs from ANY
+# install (the running GUI itself must not hold the copied binary open —
+# "Text file busy" — so during an in-app update the app closes and the
+# new version appears on next launch), and flags a package-managed copy
+# in /opt/screenguard when one exists. Same logic the RPM/DEB scriptlets
+# run, shared via tools/migrate.sh.
+if [ -f "$SRC_DIR/migrate.sh" ]; then
+  bash "$SRC_DIR/migrate.sh" stop || true
+  bash "$SRC_DIR/migrate.sh" untangle-user || true
+fi
+
+# --- 1d. Stop the unit and any surviving daemon before copying.
+# Overwriting a running executable fails with "Text file busy", so updates
+# (re-runs) must stop it first. The migration sweep already stopped most or
+# all of these; the steps below make it certain.
 if [ -f "$UNIT_FILE" ] && command -v systemctl >/dev/null 2>&1; then
   if [ "$SYSTEM" -eq 1 ]; then
     systemctl stop screenguard.service 2>/dev/null || true

@@ -2,6 +2,7 @@ name: screenguard
 arch: amd64
 platform: linux
 version: 0.1.1~beta6
+release: 1
 section: utils
 priority: optional
 maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
@@ -53,6 +54,8 @@ contents:
     dst: /usr/share/screenguard/active_window_helper.py
   - src: tools/enable_fedora_a11y.sh
     dst: /usr/share/screenguard/enable_fedora_a11y.sh
+  - src: tools/migrate.sh
+    dst: /usr/share/screenguard/migrate.sh
   - src: extension/metadata.json
     dst: /usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json
   - src: extension/extension.js

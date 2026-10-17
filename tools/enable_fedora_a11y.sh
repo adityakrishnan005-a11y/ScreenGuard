@@ -5,6 +5,17 @@ set -u
 
 log() { echo "[screenguard-a11y] $*"; }
 
+# 0) Migration: stop any running ScreenGuard instance (watchdogs, daemons,
+#    GUIs — one must not keep a replaced binary open) and reconcile shadowed
+#    installs so this package becomes the single authority: user-level
+#    shadows (~/.local) are removed and stale user extension copies are
+#    refreshed from the package. Runs before anything else so the fresh
+#    daemon below is the only one left standing.
+if [ -f /usr/share/screenguard/migrate.sh ]; then
+  bash /usr/share/screenguard/migrate.sh adopt-package \
+    || log "WARNING: install migration failed (continuing anyway)"
+fi
+
 # 1) Allow Flatpak apps to talk to the AT-SPI accessibility bus. Covers all current
 #    and future Flatpaks (system + user installs).
 for name in org.a11y.Bus org.a11y.atspi.Registry org.a11y.atspi; do

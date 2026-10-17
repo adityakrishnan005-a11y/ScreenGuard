@@ -64,6 +64,8 @@ echo "[tarball] staging..."
 cp -a "$BUNDLE/." "$STAGE/"
 cp -a "$REPO_ROOT/tools/install.sh" "$STAGE/install.sh"
 chmod +x "$STAGE/install.sh"
+cp -a "$REPO_ROOT/tools/migrate.sh" "$STAGE/migrate.sh"
+chmod +x "$STAGE/migrate.sh"
 [ -x "$STAGE/screenguard" ] || { echo "ERROR: $STAGE/screenguard missing after build" >&2; exit 1; }
 [ -x "$STAGE/screenguard-daemon" ] || { echo "ERROR: $STAGE/screenguard-daemon missing after build" >&2; exit 1; }
 

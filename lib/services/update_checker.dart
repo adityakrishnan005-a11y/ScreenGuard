@@ -11,6 +11,23 @@ import 'package:screenguard/services/notification_service.dart';
 /// - Sends desktop notifications for available updates.
 /// - Downloads release assets and triggers install.sh for self-update.
 /// - All state persisted in SQLite via the existing settings table.
+enum InstallKind {
+  /// User-level tarball install (default install.sh target, ~/.local/...).
+  userTarball,
+
+  /// System-wide tarball install (--system, /usr/local/...).
+  systemTarball,
+
+  /// RPM package install (/opt/screenguard + /usr/bin, dnf/zypper).
+  rpm,
+
+  /// .deb package install (/opt/screenguard + /usr/bin, apt).
+  deb,
+
+  /// Unrecognized install location.
+  unknown,
+}
+
 class UpdateChecker {
   static const String _repoOwner = 'adityakrishnan005-a11y';
   static const String _repoName = 'screenguard';
@@ -206,11 +223,25 @@ class UpdateChecker {
     }
   }
 
-  /// Download a release tarball and install it.
-  /// Returns true on success.
-  Future<bool> downloadAndInstall(String version) async {
+  /// Download a release asset for the detected install kind and install it.
+  ///
+  /// Medium-aware, so every install type updates correctly:
+  /// - RPM / .deb (the RPM and .deb share the `/opt/screenguard` layout —
+  ///   asked dpkg first, then rpm): download the matching package asset,
+  ///   then install through `pkexec` (polkit password dialog — works on
+  ///   GNOME without a terminal). If pkexec is refused or fails, the
+  ///   returned `note` carries the copyable manual command.
+  /// - User tarball (`~/.local/...`): self-update, extract + install.sh.
+  /// - System tarball (`/usr/local/...`): extract, then `pkexec` runs
+  ///   install.sh --system.
+  ///
+  /// Returns (success, note); on failure `note` holds a manual command the
+  /// user can run instead (empty note = generic failure, no command known).
+  Future<({bool success, String note})> downloadAndInstall(
+      String version) async {
+    Directory? tmpDir;
     try {
-      // Fetch the release to find the tarball asset
+      // Fetch the release to find the right asset.
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 10);
 
@@ -222,66 +253,167 @@ class UpdateChecker {
       final response = await request.close().timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) {
         client.close(force: true);
-        return false;
+        return (success: false, note: '');
       }
-
       final body = await response.transform(utf8.decoder).join();
       client.close(force: true);
 
       final release = jsonDecode(body) as Map<String, dynamic>;
       final assets = release['assets'] as List<dynamic>? ?? [];
 
-      // Find the tarball asset
-      String? tarballUrl;
+      final kind = await detectInstall();
+
+      // Pick the asset that matches the install medium.
+      final bool Function(String name) matcher;
+      switch (kind) {
+        case InstallKind.deb:
+          matcher = (name) => name.endsWith('_amd64.deb');
+        case InstallKind.rpm:
+          matcher = (name) => name.endsWith('.x86_64.rpm') && !name.contains('.src.');
+        case InstallKind.systemTarball:
+        case InstallKind.userTarball:
+        case InstallKind.unknown:
+          matcher = (name) => name.contains('x86_64') && name.endsWith('.tar.gz');
+      }
+      String? assetUrl;
       for (final asset in assets) {
         final name = asset['name'] as String? ?? '';
-        if (name.contains('x86_64') && name.endsWith('.tar.gz')) {
-          tarballUrl = asset['browser_download_url'] as String?;
+        if (matcher(name)) {
+          assetUrl = asset['browser_download_url'] as String?;
           break;
         }
       }
+      if (assetUrl == null) return (success: false, note: '');
 
-      if (tarballUrl == null) return false;
-
-      // Download to cache directory (avoids noexec on /tmp)
+      // Download to cache directory (avoids noexec on /tmp).
       final cacheBase = Platform.environment['XDG_CACHE_HOME'] ??
           (Platform.environment['HOME'] != null
               ? '${Platform.environment['HOME']}/.cache'
               : '/tmp');
-      final tmpDir = Directory('$cacheBase/screenguard/update');
+      tmpDir = Directory('$cacheBase/screenguard/update');
       if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
       tmpDir.createSync(recursive: true);
 
-      final tarPath = '${tmpDir.path}/screenguard-update.tar.gz';
+      final fileName = assetUrl.split('/').last;
+      final dlResult =
+          await Process.run('curl', ['-fSL', '-o', '$tmpDir/$fileName', assetUrl])
+              .timeout(const Duration(minutes: 5));
+      if (dlResult.exitCode != 0) {
+        return (success: false, note: 'Could not download the update.');
+      }
 
-      // Download using curl (more reliable than dart HttpClient for large files)
-      final dlResult = await Process.run(
-        'curl', ['-fSL', '-o', tarPath, tarballUrl],
-      ).timeout(const Duration(minutes: 5));
+      // ── Package installs: elevate via pkexec ────────────────────────────
+      if (kind == InstallKind.rpm || kind == InstallKind.deb) {
+        final pkgPath = '${tmpDir.path}/$fileName';
+        List<String> args;
+        String manual;
+        if (kind == InstallKind.rpm) {
+          final tool = await _firstOnPath(['dnf', 'zypper']) ?? 'dnf';
+          args = tool == 'dnf'
+              ? ['dnf', 'install', '-y', pkgPath]
+              : ['zypper', '--non-interactive', 'install', '-y', pkgPath];
+          manual = 'sudo $tool install -y $assetUrl';
+        } else {
+          final tool = await _firstOnPath(['apt-get', 'apt']) ?? 'apt';
+          args = [tool, 'install', '-y', pkgPath];
+          manual = 'Download the .deb from $assetUrl, then:\n'
+              'sudo $tool install -y ./path/to/$fileName';
+        }
+        var ok = false;
+        try {
+          final r = await Process.run('pkexec', args)
+              .timeout(const Duration(minutes: 10));
+          ok = r.exitCode == 0;
+        } catch (_) {}
+        if (ok) {
+          return (success: true, note: 'Installed via $args[0] —');
+        }
+        return (success: false, note: manual);
+      }
 
-      if (dlResult.exitCode != 0) return false;
-
-      // Extract
+      // ── Tarball installs: extract + install.sh ─────────────────────────
       final extractResult = await Process.run(
-        'tar', ['-xzf', tarPath, '-C', tmpDir.path],
+        'tar', ['-xzf', '$tmpDir/$fileName', '-C', tmpDir.path],
       );
-      if (extractResult.exitCode != 0) return false;
-
-      // Find and run install.sh
+      if (extractResult.exitCode != 0) {
+        return (success: false, note: 'Could not extract the update.');
+      }
       final installSh = File('${tmpDir.path}/install.sh');
-      if (!installSh.existsSync()) return false;
+      if (!installSh.existsSync()) return (success: false, note: '');
 
-      final installResult = await Process.run(
-        'bash', [installSh.path, '--yes'],
-      ).timeout(const Duration(minutes: 2));
+      final elevated = kind == InstallKind.systemTarball;
+      final runArgs = elevated
+          ? ['pkexec', 'bash', installSh.path, '--system', '--yes']
+          : ['bash', installSh.path, '--yes'];
+      final installResult = await Process.run(runArgs.first, runArgs.sublist(1))
+          .timeout(const Duration(minutes: 5));
 
-      // Cleanup
-      try { tmpDir.deleteSync(recursive: true); } catch (_) {}
-
-      return installResult.exitCode == 0;
+      final ok = installResult.exitCode == 0;
+      return (
+        success: ok,
+        note: ok
+            ? ''
+            : elevated
+                ? 'sudo bash install.sh --system --yes from the updated tarball'
+                : ''
+      );
     } catch (_) {
-      return false;
+      return (success: false, note: '');
+    } finally {
+      if (tmpDir != null) {
+        try {
+          tmpDir.deleteSync(recursive: true);
+        } catch (_) {}
+      }
     }
+  }
+
+  // ── Install environment detection ───────────────────────────────────────
+
+  /// How would [exePath] (default: the running executable) have been
+  /// installed? No cache — this only runs when the user chooses to install
+  /// an update, so a short package-manager probe is free.
+  static Future<InstallKind> detectInstall({String? exePath}) =>
+      _detectInstallUncached(exePath: exePath);
+
+  static Future<InstallKind> _detectInstallUncached({String? exePath}) async {
+    try {
+      final exe = exePath ?? Platform.resolvedExecutable;
+      final real = await File(exe).resolveSymbolicLinks();
+      // The RPM and .deb share the /opt layout.
+      if (real.startsWith('/opt/screenguard')) {
+        try {
+          final dpkg = await Process.run('dpkg-query', ['-s', 'screenguard'])
+              .timeout(const Duration(seconds: 3));
+          if (dpkg.exitCode == 0) return InstallKind.deb;
+        } catch (_) {}
+        try {
+          final rpm = await Process.run('rpm', ['-q', 'screenguard'])
+              .timeout(const Duration(seconds: 3));
+          if (rpm.exitCode == 0) return InstallKind.rpm;
+        } catch (_) {}
+        return InstallKind.rpm;
+      }
+      if (real.startsWith('/usr/local/')) return InstallKind.systemTarball;
+      final home = Platform.environment['HOME'] ?? '';
+      if (home.isNotEmpty && real.startsWith('$home/')) {
+        return InstallKind.userTarball;
+      }
+      return InstallKind.unknown;
+    } catch (_) {
+      return InstallKind.unknown;
+    }
+  }
+
+  static Future<String?> _firstOnPath(List<String> names) async {
+    for (final n in names) {
+      try {
+        final r =
+            await Process.run('which', [n]).timeout(const Duration(seconds: 3));
+        if (r.exitCode == 0) return n;
+      } catch (_) {}
+    }
+    return null;
   }
 
   // ── Notification ───────────────────────────────────────────────────────

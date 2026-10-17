@@ -125,6 +125,8 @@ INSTALL_SH="$REPO_ROOT/tools/install.sh"
 log "copying install.sh into bundle dir..."
 cp "$INSTALL_SH" "$BUNDLE/install.sh"
 chmod +x "$BUNDLE/install.sh"
+cp "$REPO_ROOT/tools/migrate.sh" "$BUNDLE/migrate.sh"
+chmod +x "$BUNDLE/migrate.sh"
 
 log "handing off to install.sh..."
 echo ""
