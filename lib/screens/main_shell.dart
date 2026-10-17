@@ -4,6 +4,7 @@ import 'package:screenguard/screens/dashboard.dart';
 import 'package:screenguard/screens/focus_screen.dart';
 import 'package:screenguard/services/daemon_service.dart';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/services/update_checker.dart';
 import 'package:screenguard/widgets/daemon_prompt_dialog.dart';
 import 'package:screenguard/widgets/daemon_status_banner.dart';
 
@@ -29,6 +30,18 @@ class _MainShellState extends State<MainShell> {
       final daemonService = Provider.of<DaemonService>(context, listen: false);
       final db = Provider.of<DatabaseService>(context, listen: false);
       DaemonPromptDialog.showIfNeeded(context, daemonService, db);
+
+      // Post-update banner: if the binary changed since the last run (any
+      // install medium — rpm/deb/tarball/manual), announce it once.
+      final updatedTo = UpdateChecker.updateNoticeOnStartup(db);
+      if (updatedTo != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ScreenGuard updated to $updatedTo ✓'),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
     });
   }
 

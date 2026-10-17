@@ -98,6 +98,25 @@ class UpdateChecker {
   /// The current app version.
   String get currentVersion => _currentVersion;
 
+  /// Startup notice for the "Updated ✓" banner. Returns the version we just
+  /// updated to when the persisted last-seen version precedes the running
+  /// one — i.e. the binary was replaced outside this process (in-app update,
+  /// rpm/deb install, manual reinstall). Re-arms the check so the next
+  /// update announces again; null when unchanged, downgraded, or on any
+  /// storage failure (the banner must never disturb startup).
+  static String? updateNoticeOnStartup(DatabaseService db) {
+    try {
+      final known = db.getSetting('app_last_seen_version', defaultValue: '');
+      db.setSetting('app_last_seen_version', _currentVersion);
+      if (known.isNotEmpty && compareVersions(_currentVersion, known) > 0) {
+        return _currentVersion;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Whether an update is available (and not dismissed).
   bool get hasUpdate {
     final known = lastKnownVersion;

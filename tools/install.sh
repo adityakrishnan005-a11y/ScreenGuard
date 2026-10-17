@@ -63,12 +63,31 @@ daemon_pids() { # $1 = DAEMON_BIN, $2 = bin-symlink path
       echo "$pid"
       continue
     fi
+    # The cmdline can disappear between readdir and this open (a dying
+    # process); bail silently instead of printing an open error per race.
+    [ -r "$d/cmdline" ] || continue
     while IFS= read -r arg; do
       if [ "$arg" = "$want1" ] || [ "$arg" = "$want2" ]; then
         echo "$pid"
         break
       fi
     done < <(tr '\0' '\n' < "$d/cmdline" 2>/dev/null) 2>/dev/null
+  done
+  return 0
+}
+
+# Echo paired "-E" "VAR=value" arguments for session variables currently
+# set. Transient services do NOT inherit the caller's environment unless
+# forwarded with -E, and the end-of-install notification + GUI relaunch
+# need the display/session variables (the user-manager environment does
+# not carry them). Runs inside set -euo pipefail: always exits 0.
+forward_env_args() {
+  local _v _val _kv
+  for _v in WAYLAND_DISPLAY DISPLAY XDG_SESSION_TYPE XDG_SESSION_DESKTOP \
+            XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS PATH; do
+    eval "_val=\${$_v:-}"
+    [ -n "$_val" ] || continue
+    printf '%s\n' "-E" "$_v=$_val"
   done
   return 0
 }
@@ -111,9 +130,11 @@ if [ "${SG_INSTALL_DETACHED:-0}" != "1" ] \
   # (-E forwards the env into the unit — plain `VAR=x systemd-run` does not.)
   RESULT_FILE="${XDG_RUNTIME_DIR}/screenguard-install-result"
   rm -f "$RESULT_FILE"
+  mapfile -t DETACH_ENV < <(forward_env_args)
   systemd-run --user --quiet --wait --collect \
     -E "SG_INSTALL_DETACHED=1" \
     -E "SG_INSTALL_RESULT=$RESULT_FILE" \
+    "${DETACH_ENV[@]}" \
     --unit="screenguard-install-$$.service" bash "$0" "${ORIG_ARGS[@]}" >/dev/null 2>&1
   wrap_rc=$?
   if [ -f "$RESULT_FILE" ]; then
@@ -389,6 +410,13 @@ EOF
   else
     systemctl --user daemon-reload 2>/dev/null || true
     if [ "$SHOULD_ENABLE" -eq 1 ]; then
+      # Disable first: an existing wants-symlink pointing at ANOTHER copy
+      # of this unit (e.g. a package-owned /usr/lib unit) is not re-pointed
+      # by enabled-with-no-change, so at the next login systemd started the
+      # stale binary, which grabbed the single-instance lock and
+      # crash-looped the freshly installed daemon (seen live: 102 restarts
+      # of the new unit, "Another daemon instance is already running").
+      systemctl --user disable screenguard.service 2>/dev/null || true
       systemctl --user enable --now screenguard.service 2>/dev/null \
         && log "daemon installed and started (systemd user service, starts on login)" \
         || { ENABLE_FAILED=1; log "WARNING: systemctl --user failed; falling back to XDG autostart"; }
@@ -441,13 +469,35 @@ elif [ "$UNIT_ACTIVE" -eq 1 ] && [ -f "$AUTOSTART_FILE" ]; then
   log "removed redundant XDG autostart entry (systemd unit is active)"
 fi
 
-# --- 5. Verify ---
+# --- 5. Own the daemon. Anything running the OLD binary (respawned behind
+# our back mid-install, or started by another install's unit) must not
+# survive: it either holds the single-instance lock, so the fresh unit's
+# daemon exits and systemd crash-loops it forever (seen live: 102 restarts),
+# or runs stale code next to a new GUI (version skew). Sweep, then verify.
+sleep 1
+for _pid in $(daemon_pids "$DAEMON_BIN" "$BIN_DIR/screenguard-daemon"); do
+  _exe="$(readlink "/proc/$_pid/exe" 2>/dev/null || true)"
+  if [ "$_exe" != "$DAEMON_BIN" ]; then
+    kill -9 "$_pid" 2>/dev/null || true
+    log "stopped stale daemon pid $_pid ($_exe)."
+  fi
+done
+sleep 1
 _RUNNING_PIDS="$(daemon_pids "$DAEMON_BIN" "$BIN_DIR/screenguard-daemon")"
 if [ -n "$_RUNNING_PIDS" ]; then
   log "verified: screenguard-daemon is running (pid $(echo "$_RUNNING_PIDS" | head -n 1))."
 else
   log "starting daemon now..."
-  "$DAEMON_BIN" >/dev/null 2>&1 &
+  # Spawn detached — a plain background child would be killed when this
+  # transient service's cgroup is torn down on exit. A transient unit of
+  # its own lives until the next login/logout cycle.
+  if command -v systemd-run >/dev/null 2>&1 && [ "$SYSTEM" -eq 0 ]; then
+    mapfile -t DAEMON_ENV < <(forward_env_args)
+    systemd-run --user --quiet --collect --unit="screenguard-daemon-$$.service" \
+      "${DAEMON_ENV[@]}" "$DAEMON_BIN" >/dev/null 2>&1 || true
+  else
+    "$DAEMON_BIN" >/dev/null 2>&1 &
+  fi
   sleep 1
   _RUNNING_PIDS="$(daemon_pids "$DAEMON_BIN" "$BIN_DIR/screenguard-daemon")"
   if [ -n "$_RUNNING_PIDS" ]; then
@@ -455,6 +505,46 @@ else
   else
     log "WARNING: could not confirm the daemon is running. Try:  $DAEMON_BIN &"
   fi
+fi
+
+# --- 6. Announce. The updater's GUI was closed by the migration sweep (or
+# by the user), so from the user's view the app just vanished: this is the
+# proof the update landed — a desktop notification, then the NEW GUI is
+# relaunched automatically. Skipped for root/system installs: under a
+# pkexec scriptlet no user session environment is guaranteed.
+if [ "$SYSTEM" -eq 0 ]; then
+  mapfile -t REOPEN_ENV < <(forward_env_args)
+  if [ "${#REOPEN_ENV[@]}" -gt 0 ]; then
+    _NOTIFY=""
+    for _n in "$APP_DIR/screenguard-notify" "$HOME/.local/bin/screenguard-notify" \
+              /opt/screenguard/screenguard-notify /usr/bin/screenguard-notify; do
+      [ -x "$_n" ] && { _NOTIFY="$_n"; break; }
+    done
+    if [ -n "$_NOTIFY" ]; then
+      "$_NOTIFY" -t "ScreenGuard updated" \
+        -b "Installed successfully — reopening ScreenGuard." \
+        -i screenguard -u normal -e 8000 >/dev/null 2>&1 || true
+      log "update notification sent."
+    fi
+    if command -v systemd-run >/dev/null 2>&1 && [ -f "$APP_DIR/screenguard" ]; then
+      # Own transient unit (own cgroup): survives THIS service's exit and,
+      # with --collect, vanishes again when the user closes the GUI.
+      systemd-run --user --quiet --collect --unit="screenguard-gui-$$.service" \
+        "${REOPEN_ENV[@]}" "$APP_DIR/screenguard" >/dev/null 2>&1 \
+        && log "reopened the GUI from the new install." \
+        || log "could not auto-reopen; use the app menu to open it."
+    fi
+  fi
+fi
+
+# --- 7. Housekeeping. When the updater's own process was killed mid-flight
+# (old betas), its staging dir was never cleaned up; drop it here — but
+# only when we ARE that staging dir (manual/dev runs elsewhere untouched).
+_UPDATER_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/screenguard/update"
+_CASE_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || _CASE_DIR=""
+if [ -n "$_CASE_DIR" ] && [ "$_CASE_DIR" = "$_UPDATER_CACHE" ]; then
+  rm -rf "$_UPDATER_CACHE" 2>/dev/null || true
+  log "cleaned the updater staging directory."
 fi
 
 log "done. Launch the GUI with 'screenguard' (or $APP_DIR/screenguard)."

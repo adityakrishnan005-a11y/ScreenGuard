@@ -1638,6 +1638,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       else
                         FilledButton.icon(
                           onPressed: () async {
+                            // Set expectations BEFORE the sweep closes the
+                            // GUI: the installer announces and reopens, but
+                            // the user should not be surprised by the
+                            // disappearing window.
+                            final proceed = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Update ScreenGuard'),
+                                content: const Text(
+                                  'ScreenGuard will close itself, install a new version in its own systemd service, and reopen automatically.\n\n'
+                                  'If nothing reopens, launch it from the applications menu.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Update now'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (proceed != true) return;
                             setState(() => _isInstallingUpdate = true);
                             final result = await _updateChecker
                                 .downloadAndInstall(latestVersion);
