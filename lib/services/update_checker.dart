@@ -295,10 +295,7 @@ class UpdateChecker {
       tmpDir.createSync(recursive: true);
 
       final fileName = assetUrl.split('/').last;
-      final dlResult =
-          await Process.run('curl', ['-fSL', '-o', '$tmpDir/$fileName', assetUrl])
-              .timeout(const Duration(minutes: 5));
-      if (dlResult.exitCode != 0) {
+      if (!await _downloadTo(assetUrl, '$tmpDir/$fileName')) {
         return (success: false, note: 'Could not download the update.');
       }
 
@@ -366,6 +363,58 @@ class UpdateChecker {
         } catch (_) {}
       }
     }
+  }
+
+  /// Downloads [url] into [destPath]. Pure-Dart first (no external tools —
+  /// minimal Debian and similar installs ship no `curl`/`wget`, and the old
+  /// updater hard-failed the whole update on that), then curl, then wget.
+  static Future<bool> _downloadTo(String url, String destPath) async {
+    // 1) Pure Dart stream. Follows redirects; keeps everything in-process
+    //    so there is no tool dependency and no missing-password/no-tty
+    //    surface.
+    var dartOk = false;
+    final client = HttpClient();
+    try {
+      client.userAgent = 'ScreenGuard/$_currentVersion';
+      final req = await client.getUrl(Uri.parse(url));
+      final res = await req.close().timeout(const Duration(minutes: 10));
+      if (res.statusCode == 200) {
+        final sink = File(destPath).openWrite();
+        try {
+          await for (final chunk in res) {
+            sink.add(chunk);
+          }
+          await sink.flush();
+          dartOk = true;
+        } finally {
+          await sink.close();
+        }
+      }
+    } catch (_) {
+      dartOk = false;
+    } finally {
+      client.close(force: true);
+    }
+    if (dartOk && File(destPath).lengthSync() > 1024) return true;
+
+    // 2) & 3) Tool fallbacks (in case dart's stack is blocked by a proxy).
+    for (final tool in [
+      ['curl', '-fsSL', '-o'],
+      ['wget', '-q', '-O'],
+    ]) {
+      try {
+        final r = await Process.run(tool[0], [...tool.skip(1), destPath, url])
+            .timeout(const Duration(minutes: 10));
+        if (r.exitCode == 0 && File(destPath).lengthSync() > 1024) return true;
+      } catch (_) {}
+    }
+
+    // Leave no partial file behind for postinstall/all later phases.
+    try {
+      final f = File(destPath);
+      if (f.existsSync()) f.deleteSync();
+    } catch (_) {}
+    return false;
   }
 
   // ── Install environment detection ───────────────────────────────────────
