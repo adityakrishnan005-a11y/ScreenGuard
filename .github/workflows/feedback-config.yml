@@ -1,0 +1,39 @@
+name: Publish Feedback Config
+
+on:
+  push:
+    branches: [main, beta]
+    paths: ['docs/feedback.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage feedback config
+        run: |
+          mkdir -p _site
+          cp docs/feedback.json _site/feedback.json
+
+      # docs/feedback.json is the single source of truth for the in-app
+      # feedback request.  Rules for editing it:
+      #   - Bump "id" whenever the content changes, otherwise users who
+      #     already dismissed the old request will not see the new one.
+      #   - "min_version" / "max_version" gate the cohort; an empty bound
+      #     means unbounded, so the request reaches every build from that
+      #     version on.
+      #   - "expires" (YYYY-MM-DD) stops showing the request after that
+      #     date.  Remove it to keep the request alive.
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: _site
+          destination_dir: .
+          keep_files: true
+          force_orphan: false

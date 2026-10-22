@@ -54,6 +54,7 @@ class NotificationService {
     String icon = 'screenguard',
     String urgency = 'normal',
     int timeoutMs = 5000,
+    bool playSound = true,
   }) async {
     final notifyGlobal = db.isNotificationsGloballyEnabled();
     final notifyEvent = db.isEventNotificationEnabled(eventKey);
@@ -118,7 +119,9 @@ class NotificationService {
     }
 
     // 2. Sound Cue
-    if (db.isSoundGloballyEnabled() && db.isEventSoundEnabled(eventKey)) {
+    if (playSound &&
+        db.isSoundGloballyEnabled() &&
+        db.isEventSoundEnabled(eventKey)) {
       try {
         final soundTheme = db.getSoundTheme();
         final customPath = db.getCustomSoundPath();

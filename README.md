@@ -220,6 +220,18 @@ Open a [GitHub Issue](https://github.com/adityakrishnan005-a11y/ScreenGuard/issu
 
 ---
 
+## Feedback 💬
+
+Beta users are the reason this project works, and I want to hear from you directly.
+
+* **In the app** — *Settings → General → Send feedback* opens a discussion where you can tell me what works and what does not.
+* **On GitHub** — [Discussions](https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions) for questions, ideas and general feedback; [Issues](https://github.com/adityakrishnan005-a11y/ScreenGuard/issues) for bugs.
+* **Feedback requests** — when I need input on a specific decision, ScreenGuard downloads a small public file once a day and shows the request in the app. It is a read-only fetch of a static JSON file: no identifiers, no usage data, nothing leaves your machine except the app version in the request header. The notification can be turned off in *Settings → General*.
+
+> **Reporting a bug?** Please attach a screenshot or video and name your desktop environment and version — especially on X11, so the issue can be reproduced.
+
+---
+
 ## Contributing
 
 Contributions are warmly welcomed! ScreenGuard is built by and for the Linux community.

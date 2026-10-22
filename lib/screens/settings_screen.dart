@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:screenguard/services/crash_reporter.dart';
 import 'package:screenguard/services/daemon_service.dart';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/services/feedback_service.dart';
 import 'package:screenguard/services/sound_service.dart';
 import 'package:screenguard/services/theme_service.dart';
 import 'package:screenguard/services/update_checker.dart';
@@ -41,8 +42,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _soundAppLimit;
   late bool _notifyFocusMode;
   late bool _soundFocusMode;
+  late bool _notifyFeedback;
 
   bool _isPlayingTest = false;
+
+  // ── Feedback ─────────────────────────────────────────────────────────────
+  late FeedbackService _feedbackService;
+  late String _feedbackPromptId;
+  late String _feedbackLastCheck;
+  bool _feedbackChecking = false;
 
   // ── Tab 2: Daily Limits & Pomodoro ─────────────────────────────────────────
   late bool _pomodoroLoopEnabled;
@@ -95,6 +103,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _soundAppLimit = widget.db.isEventSoundEnabled('app_limit');
     _notifyFocusMode = widget.db.isEventNotificationEnabled('focus_mode');
     _soundFocusMode = widget.db.isEventSoundEnabled('focus_mode');
+    _notifyFeedback = widget.db.isEventNotificationEnabled('feedback');
+
+    // Feedback requests published by the maintainer.
+    _feedbackService = FeedbackService(db: widget.db);
+    _feedbackPromptId = _feedbackService.storedPromptId;
+    _feedbackLastCheck = _feedbackService.lastCheckTime;
 
     // Tab 2: Limits & Pomodoro
     _pomodoroLoopEnabled = widget.db.isPomodoroLoopEnabled();
@@ -244,6 +258,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSoundSelectionCard(),
             const SizedBox(height: 16),
             _buildEventAlertsCard(),
+            const SizedBox(height: 16),
+            _buildFeedbackCard(),
             const SizedBox(height: 32),
           ],
         ),
@@ -577,6 +593,133 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildFeedbackCard() {
+    final theme = Theme.of(context);
+    final lastCheck = _formatRelative(_feedbackLastCheck);
+
+    return _sectionCard(
+      children: [
+        _sectionHeader('Feedback'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: theme.colorScheme.primary,
+                size: 20,
+              ),
+            ),
+            title: const Text(
+              'Send feedback',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            subtitle: const Text(
+              'Tell the maintainer what works and what does not',
+              style: TextStyle(fontSize: 12),
+            ),
+            trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+            onTap: () => _openUrl(FeedbackService.discussionsUrl),
+          ),
+        ),
+        const Divider(height: 1),
+        SwitchListTile(
+          secondary: const Icon(Icons.campaign_outlined),
+          title: const Text(
+            'Feedback request notifications',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: const Text(
+            'Notify me when the maintainer asks for feedback',
+            style: TextStyle(fontSize: 12),
+          ),
+          value: _notifyFeedback,
+          onChanged: (val) {
+            setState(() => _notifyFeedback = val);
+            widget.db.setEventNotificationEnabled('feedback', val);
+          },
+        ),
+        const Divider(height: 1),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.sync_alt_rounded),
+          title: Text(
+            _feedbackPromptId.isEmpty
+                ? 'No feedback request waiting'
+                : 'Feedback request waiting: $_feedbackPromptId',
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+          subtitle: Text(
+            'Last checked $lastCheck — ScreenGuard only downloads a small '
+            'public file; your usage data never leaves this PC.',
+            style: const TextStyle(fontSize: 12),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_feedbackPromptId.isNotEmpty)
+                IconButton(
+                  tooltip: 'Clear request',
+                  onPressed: _feedbackChecking ? null : _clearFeedbackRequest,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+              IconButton(
+                tooltip: 'Check now',
+                onPressed: _feedbackChecking ? null : _checkFeedbackNow,
+                icon: _feedbackChecking
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_outlined),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _checkFeedbackNow() async {
+    setState(() => _feedbackChecking = true);
+    // fetchAndStore (not checkNow) — the user is already looking at the
+    // result, so no desktop notification is needed.
+    final changed = await _feedbackService.fetchAndStore();
+    if (!mounted) return;
+    setState(() {
+      _feedbackChecking = false;
+      _feedbackPromptId = _feedbackService.storedPromptId;
+      _feedbackLastCheck = _feedbackService.lastCheckTime;
+    });
+    _snack(changed
+        ? 'A new feedback request arrived.'
+        : 'Checked — no new feedback request.');
+  }
+
+  void _clearFeedbackRequest() {
+    _feedbackService.clearStoredPrompt();
+    setState(() => _feedbackPromptId = _feedbackService.storedPromptId);
+    _snack('Stored feedback request cleared.');
+  }
+
+  String _formatRelative(String iso) {
+    if (iso.isEmpty) return 'never';
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return 'never';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} h ago';
+    return '${diff.inDays} d ago';
   }
 
   Widget _buildEventRow({

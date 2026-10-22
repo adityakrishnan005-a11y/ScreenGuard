@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:screenguard/services/app_version.dart';
 import 'package:screenguard/services/db.dart';
 import 'package:screenguard/services/notification_service.dart';
 
@@ -32,7 +33,7 @@ class UpdateChecker {
   static const String _repoOwner = 'adityakrishnan005-a11y';
   static const String _repoName = 'screenguard';
   static const String _apiBase = 'https://api.github.com/repos/$_repoOwner/$_repoName/releases';
-  static const String _currentVersion = '0.1.1-beta.6';
+  static const String _currentVersion = AppVersion.value;
 
   final DatabaseService db;
   Timer? _checkTimer;

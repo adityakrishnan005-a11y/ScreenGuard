@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:screenguard/services/app_version.dart';
+
 /// Lightweight crash/error reporter and telemetry service for ScreenGuard.
 ///
 /// - Writes structured JSON crash logs locally (~1-5 KB each) for user inspection.
@@ -466,7 +468,7 @@ class CrashReporter {
   }
 
   String _getAppVersion() {
-    return const String.fromEnvironment('APP_VERSION', defaultValue: '0.1.1-beta.6');
+    return AppVersion.current;
   }
 
   static String _truncate(String s, int maxLen) {

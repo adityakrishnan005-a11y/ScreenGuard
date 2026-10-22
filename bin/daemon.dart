@@ -4,6 +4,7 @@ import 'package:screenguard/services/db.dart';
 import 'package:screenguard/services/app_resolver.dart';
 import 'package:screenguard/services/tracker.dart';
 import 'package:screenguard/services/crash_reporter.dart';
+import 'package:screenguard/services/feedback_service.dart';
 import 'package:screenguard/services/update_checker.dart';
 
 // Top-level reference prevents Garbage Collection from releasing the OS file lock
@@ -52,6 +53,11 @@ void main() async {
     final updateChecker = UpdateChecker(db: db);
     updateChecker.startPeriodicChecks();
 
+    // Look for a feedback request from the maintainer (once per day).
+    // Read-only fetch of a static JSON file — no user data is sent.
+    final feedbackService = FeedbackService(db: db);
+    feedbackService.startPeriodicChecks();
+
     // Heartbeat: write a timestamp every 5 minutes so the GUI can detect a dead daemon
     Timer.periodic(const Duration(minutes: 5), (_) {
       crashReporter.writeHeartbeat();
@@ -65,6 +71,7 @@ void main() async {
       tracker.stop();
       crashReporter.markDaemonStopped();
       updateChecker.stopPeriodicChecks();
+      feedbackService.stopPeriodicChecks();
       try {
         _daemonLockFile?.unlockSync();
         _daemonLockFile?.closeSync();
