@@ -28,7 +28,11 @@ class FeedbackService {
   static const String defaultEndpoint =
       'https://adityakrishnan005-a11y.github.io/ScreenGuard/feedback.json';
 
-  /// Where feedback is collected.
+  /// The feedback hub — a pinned discussion that explains what to report.
+  static const String feedbackHubUrl =
+      'https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/5';
+
+  /// Where a brand new discussion is started.
   static const String discussionsUrl =
       'https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/new';
 

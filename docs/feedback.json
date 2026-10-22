@@ -8,15 +8,15 @@
   "actions": [
     {
       "label": "Give feedback",
+      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/5"
+    },
+    {
+      "label": "Start a new discussion",
       "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/new"
     },
     {
       "label": "Report a bug",
       "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/issues/new?labels=bug"
-    },
-    {
-      "label": "Read the roadmap",
-      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/wiki/Roadmap"
     }
   ]
 }

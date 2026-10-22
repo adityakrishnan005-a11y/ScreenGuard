@@ -627,7 +627,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontSize: 12),
             ),
             trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-            onTap: () => _openUrl(FeedbackService.discussionsUrl),
+            onTap: () => _openUrl(FeedbackService.feedbackHubUrl),
           ),
         ),
         const Divider(height: 1),
