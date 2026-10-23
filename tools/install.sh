@@ -186,6 +186,12 @@ do_uninstall() {
     kill -9 "$_pid" 2>/dev/null || true
   done
   rm -f "$UNIT_FILE" "$AUTOSTART_FILE" "$BIN_DIR/screenguard" "$BIN_DIR/screenguard-daemon" "$BIN_DIR/screenguard-watchdog" "$BIN_DIR/screenguard-notify" "$BIN_DIR/screenguard-killer"
+  # Remove the shadow of a distro autostart entry, but only if this installer
+  # wrote it (never delete a user's own file).
+  if [ -f "$AUTOSTART_DIR/screenguard-autostart.desktop" ] \
+     && grep -q "Shadowed by the ScreenGuard install" "$AUTOSTART_DIR/screenguard-autostart.desktop" 2>/dev/null; then
+    rm -f "$AUTOSTART_DIR/screenguard-autostart.desktop"
+  fi
   rm -rf "$APP_DIR"
   if [ "$SYSTEM" -eq 1 ]; then
     # Remove the system entry only when no package manager owns the install.
@@ -372,6 +378,24 @@ else
 fi
 
 # --- 4. Install autostart: systemd user unit, XDG autostart as fallback ---
+# A distro package may ship /etc/xdg/autostart/screenguard-autostart.desktop
+# pointing at /usr/bin/screenguard-daemon. If it runs alongside this install,
+# the package daemon grabs daemon.lock first and the local daemon exits on
+# every start. Shadow the system entry on user installs so only one runs.
+if [ "$SYSTEM" -eq 0 ] && [ -f "/etc/xdg/autostart/screenguard-autostart.desktop" ]; then
+  mkdir -p "$AUTOSTART_DIR"
+  cat > "$AUTOSTART_DIR/screenguard-autostart.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=ScreenGuard Daemon (shadowed)
+Comment=Shadowed by the ScreenGuard install in $PREFIX; the daemon is started by this install instead.
+Exec=/usr/bin/screenguard-daemon
+Hidden=true
+X-GNOME-Autostart-enabled=false
+EOF
+  log "shadowed the distro autostart entry (/etc/xdg/autostart/screenguard-autostart.desktop) so two daemons cannot fight over the lock"
+fi
+
 HAVE_SYSTEMD_USER=0
 if command -v systemctl >/dev/null 2>&1; then
   if [ "$SYSTEM" -eq 1 ] || systemctl --user show-environment >/dev/null 2>&1; then
@@ -392,7 +416,11 @@ After=graphical-session.target
 Type=simple
 ExecStart=$DAEMON_BIN
 TimeoutStopSec=10
-Restart=always
+# on-failure, not always: the daemon exits 0 when another instance already
+# owns daemon.lock (e.g. a distro package's autostart). Restart=always turned
+# that into an endless 3-second restart loop, spamming the journal hundreds of
+# times. A real crash still exits non-zero and is restarted.
+Restart=on-failure
 RestartSec=3
 
 [Install]
