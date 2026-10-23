@@ -282,17 +282,16 @@ class DatabaseService {
     db.execute('DELETE FROM app_limits WHERE app = ?', [app]);
   }
 
-  Set<String>? _cachedDistractingApps;
-
   Set<String> getDistractingApps() {
-    if (_cachedDistractingApps != null) return _cachedDistractingApps!;
+    // Always read from the DB: this is a tiny table and the daemon relies on
+    // it every tick. Caching it meant that removing an app from the Focus
+    // list had no effect until the daemon was restarted — real users saw the
+    // app keep being blocked after they had unchecked it.
     final rows = db.select('SELECT app FROM distracting_apps');
-    _cachedDistractingApps = rows.map((r) => r['app'] as String).toSet();
-    return _cachedDistractingApps!;
+    return rows.map((r) => r['app'] as String).toSet();
   }
 
   void toggleDistractingApp(String app) {
-    _cachedDistractingApps = null;
     final exists = db.select('SELECT app FROM distracting_apps WHERE app = ?', [app]);
     if (exists.isNotEmpty) {
       db.execute('DELETE FROM distracting_apps WHERE app = ?', [app]);
