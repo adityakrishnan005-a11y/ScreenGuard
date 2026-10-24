@@ -8,13 +8,15 @@ import 'package:screenguard/services/app_version.dart';
 ///
 /// - Writes structured JSON crash logs locally (~1-5 KB each) for user inspection.
 /// - Reads and manages stored crash logs.
-/// - Connects to Sentry for automatic crash analysis and active user counting (opt-in).
+/// - Connects to Sentry for automatic crash analysis and active user counting (opt-out).
 /// - Completely zero-dependency (pure dart:io + dart:convert).
 /// - Anonymous: Uses a random local UUID (no IP, username, or screen time data transmitted).
 class CrashReporter {
   static const int maxCrashLogs = 20;
   static const String _crashDir = 'crashes';
-  static const String _repoUrl = 'https://github.com/adityakrishnan005-a11y/screenguard';
+  static const String _repoUrl =
+      'https://github.com/adityakrishnan005-a11y/screenguard';
+  static const int _maxQueuedDays = 7;
 
   // Sentry Configuration
   static const String _sentryKey = '4898f3d5a159e8a898b548c1ad262ca6';
@@ -24,8 +26,20 @@ class CrashReporter {
       'https://$_sentryHost/api/$_sentryProjectId/store/';
 
   final String _dataDir;
+  final String? _endpoint;
+  final String? _channelOverride;
+  final DateTime Function() _clock;
+  bool _pingInFlight = false;
 
-  CrashReporter({String? dataDir}) : _dataDir = dataDir ?? _resolveDataDir();
+  CrashReporter({
+    String? dataDir,
+    String? endpoint,
+    String? channel,
+    DateTime Function()? clock,
+  })  : _dataDir = dataDir ?? _resolveDataDir(),
+        _endpoint = endpoint,
+        _channelOverride = channel,
+        _clock = clock ?? DateTime.now;
 
   static String _resolveDataDir() {
     final home = Platform.environment['HOME'];
@@ -62,35 +76,54 @@ class CrashReporter {
     } catch (_) {}
   }
 
-  /// Whether automatic crash and issue reporting is enabled.
-  /// Default: true (opt-in / opt-out enabled by default for beta feedback).
+  /// Read-modify-write helper so concurrent callers cannot overwrite each
+  /// other's keys with a stale copy of the config.
+  void _updateTelemetryConfig(
+      void Function(Map<String, dynamic> config) mutate) {
+    final config = _readTelemetryConfig();
+    mutate(config);
+    _writeTelemetryConfig(config);
+  }
+
+  /// Whether anonymous diagnostics (crash reports and the daily
+  /// active-install ping) are enabled. Default: true (opt-out).
   bool isReportingEnabled() {
     final config = _readTelemetryConfig();
     return (config['enabled'] as bool?) ?? true;
   }
 
-  /// Update user preference for automatic crash reporting.
+  /// Update user preference for anonymous diagnostics.
   void setReportingEnabled(bool enabled) {
-    final config = _readTelemetryConfig();
-    config['enabled'] = enabled;
-    _writeTelemetryConfig(config);
+    _updateTelemetryConfig((config) {
+      config['enabled'] = enabled;
+      if (!enabled) {
+        // Nothing may be queued while reporting is off. When the user opts
+        // back in, start from that day instead of back-filling the opt-out
+        // window they explicitly refused to share.
+        config['ping_outbox'] = <Map<String, dynamic>>[];
+        final today = _utcDate(_clock().toUtc());
+        config['last_ping_success'] = today;
+        config['last_ping_date'] = today;
+      }
+    });
   }
 
   /// Retrieves or generates a persistent anonymous user identifier.
   /// Purely random — contains zero machine or personal data.
   String getAnonymousId() {
     final config = _readTelemetryConfig();
-    if (config['anonymous_id'] is String && (config['anonymous_id'] as String).isNotEmpty) {
-      return config['anonymous_id'] as String;
+    final existing = config['anonymous_id'];
+    if (existing is String && existing.isNotEmpty) {
+      return existing;
     }
 
     // Generate random 16-hex character id
     final random = Random.secure();
     final values = List<int>.generate(8, (_) => random.nextInt(256));
-    final id = 'usr_${values.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+    final id =
+        'usr_${values.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
 
-    config['anonymous_id'] = id;
-    _writeTelemetryConfig(config);
+    _updateTelemetryConfig((config) => config['anonymous_id'] = id);
     return id;
   }
 
@@ -110,6 +143,9 @@ class CrashReporter {
     String? source,
     String? stackTrace,
     Map<String, dynamic>? extra,
+    String? eventId,
+    DateTime? timestamp,
+    Map<String, String>? extraTags,
   }) async {
     if (!isReportingEnabled()) return false;
 
@@ -117,87 +153,279 @@ class CrashReporter {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 8);
 
-      final eventId = _generateEventId();
-      final nowUtc = DateTime.now().toUtc().toIso8601String();
-      final version = _getAppVersion();
-      final env = _getEnvironment();
-      final anonId = getAnonymousId();
+      try {
+        final id = eventId ?? _generateEventId();
+        final sentAt = (timestamp ?? _clock()).toUtc().toIso8601String();
+        final version = _getAppVersion();
+        final env = _getEnvironment();
+        final anonId = getAnonymousId();
+        final channel = _buildChannel();
 
-      final payload = <String, dynamic>{
-        'event_id': eventId,
-        'timestamp': nowUtc,
-        'platform': 'other',
-        'level': level,
-        'logger': 'screenguard',
-        'release': 'screenguard@$version',
-        'environment': 'production',
-        'message': {'message': message},
-        'tags': {
-          'source': source ?? 'app',
-          'de': env['de'] ?? 'unknown',
-          'display_server': env['displayServer'] ?? 'unknown',
-          'os': env['os'] ?? 'unknown',
-        },
-        'user': {
-          'id': anonId,
-        },
-        'contexts': {
-          'os': {
-            'name': env['os'] ?? 'Linux',
-            'version': Platform.operatingSystemVersion,
+        final payload = <String, dynamic>{
+          'event_id': id,
+          'timestamp': sentAt,
+          'platform': 'other',
+          'level': level,
+          'logger': 'screenguard',
+          'release': 'screenguard@$version',
+          'environment': channel == 'dev' ? 'development' : 'production',
+          'message': {'message': message},
+          'tags': {
+            'source': source ?? 'app',
+            'de': env['de'] ?? 'unknown',
+            'display_server': env['displayServer'] ?? 'unknown',
+            'os': env['os'] ?? 'unknown',
+            'build_channel': channel,
+            if (extraTags != null) ...extraTags,
           },
-          'runtime': {
-            'name': 'Dart',
-            'version': env['dartVersion'] ?? Platform.version,
+          'user': {
+            'id': anonId,
           },
-        },
-      };
-
-      if (stackTrace != null && stackTrace.isNotEmpty) {
-        payload['extra'] = {
-          'stacktrace_raw': stackTrace,
-          if (extra != null) ...extra,
+          'contexts': {
+            'os': {
+              'name': env['os'] ?? 'Linux',
+              'version': Platform.operatingSystemVersion,
+            },
+            'runtime': {
+              'name': 'Dart',
+              'version': env['dartVersion'] ?? Platform.version,
+            },
+          },
         };
-      } else if (extra != null) {
-        payload['extra'] = extra;
+
+        if (stackTrace != null && stackTrace.isNotEmpty) {
+          payload['extra'] = {
+            'stacktrace_raw': stackTrace,
+            if (extra != null) ...extra,
+          };
+        } else if (extra != null) {
+          payload['extra'] = extra;
+        }
+
+        final endpoint = _endpoint ?? _sentryEndpoint;
+        final request = await client.postUrl(Uri.parse(endpoint));
+        request.headers.set('Content-Type', 'application/json');
+        request.headers.set(
+          'X-Sentry-Auth',
+          'Sentry sentry_version=7, sentry_client=screenguard/$version, sentry_key=$_sentryKey',
+        );
+
+        request.add(utf8.encode(jsonEncode(payload)));
+        final response =
+            await request.close().timeout(const Duration(seconds: 10));
+
+        // Drain the body so the connection is not torn down before Sentry has
+        // finished accepting the event.
+        await response
+            .transform(utf8.decoder)
+            .join()
+            .timeout(const Duration(seconds: 10));
+
+        return response.statusCode >= 200 && response.statusCode < 300;
+      } finally {
+        client.close(force: true);
       }
-
-      final request = await client.postUrl(Uri.parse(_sentryEndpoint));
-      request.headers.set('Content-Type', 'application/json');
-      request.headers.set(
-        'X-Sentry-Auth',
-        'Sentry sentry_version=7, sentry_client=screenguard/$version, sentry_key=$_sentryKey',
-      );
-
-      request.add(utf8.encode(jsonEncode(payload)));
-      final response = await request.close().timeout(const Duration(seconds: 10));
-      client.close(force: true);
-
-      return response.statusCode >= 200 && response.statusCode < 300;
     } catch (_) {
       return false;
     }
   }
 
   /// Sends a daily heartbeat ping to register active user count on Sentry.
-  /// Only runs once per day, non-blocking.
+  ///
+  /// Delivery is best-effort but never silently abandoned: each UTC day is
+  /// queued locally, retried with backoff, and only marked sent after Sentry
+  /// accepts it. Up to seven days of queued failures are retried, so a flaky
+  /// network no longer erases a day on which the daemon was actually running.
   Future<void> maybeSendDailyActivePing() async {
+    if (_pingInFlight) return;
     if (!isReportingEnabled()) return;
+    if (_buildChannel() == 'dev') return;
+    if (_isCi()) return;
+    if (Platform.environment['SCREENGUARD_NO_TELEMETRY'] == '1') return;
 
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-    final config = _readTelemetryConfig();
-    final lastPing = config['last_ping_date'] as String?;
+    _pingInFlight = true;
+    try {
+      // Persist the anonymous id before touching the config, otherwise a
+      // later read-modify-write could overwrite the freshly generated id.
+      getAnonymousId();
 
-    if (lastPing == today) return; // Already pinged today
+      final nowUtc = _clock().toUtc();
+      final today = _utcDate(nowUtc);
 
-    config['last_ping_date'] = today;
-    _writeTelemetryConfig(config);
+      _updateTelemetryConfig((config) => _ensureOutbox(config, nowUtc));
 
-    await sendToSentry(
-      level: 'info',
-      source: 'daemon',
-      message: 'ScreenGuard Daily Active Session',
-    );
+      final config = _readTelemetryConfig();
+      final pending = _outbox(config)
+        ..sort((a, b) {
+          final aDate = a['date'] as String? ?? '';
+          final bDate = b['date'] as String? ?? '';
+          return aDate.compareTo(bDate);
+        });
+
+      for (final entry in pending) {
+        final date = entry['date'];
+        final eventId = entry['event_id'];
+        if (date is! String || eventId is! String) continue;
+
+        final nextAttempt = entry['next_attempt_at'];
+        if (nextAttempt is int && nextAttempt > nowUtc.millisecondsSinceEpoch) {
+          continue; // Still backing off from a previous failure.
+        }
+
+        // Back-filled days use noon UTC so they cannot drift across the day
+        // boundary; today's ping keeps its real send time.
+        final sentAt =
+            date == today ? nowUtc : DateTime.parse('${date}T12:00:00Z');
+
+        final delivered = await sendToSentry(
+          level: 'info',
+          source: 'daemon',
+          message: 'ScreenGuard Daily Active Session',
+          eventId: eventId,
+          timestamp: sentAt,
+          extraTags: const {'ping_schema': '2'},
+        );
+
+        if (delivered) {
+          _updateTelemetryConfig((config) {
+            final remaining = _outbox(config)
+              ..removeWhere((e) => e['date'] == date);
+            config['ping_outbox'] = remaining;
+
+            final previous = config['last_ping_success'] as String?;
+            if (previous == null || date.compareTo(previous) > 0) {
+              config['last_ping_success'] = date;
+              config['last_ping_date'] = date;
+            }
+          });
+        } else {
+          _updateTelemetryConfig((config) {
+            final queued = _outbox(config);
+            for (final e in queued) {
+              if (e['date'] != date) continue;
+              final attempts = (e['attempts'] as int? ?? 0) + 1;
+              e['attempts'] = attempts;
+              e['next_attempt_at'] =
+                  nowUtc.add(_retryDelay(attempts)).millisecondsSinceEpoch;
+            }
+            config['ping_outbox'] = queued;
+            config['last_ping_attempt'] = nowUtc.toIso8601String();
+          });
+
+          // Sentry is likely unreachable; do not hammer the rest of the
+          // queue on the same tick.
+          break;
+        }
+      }
+    } catch (_) {
+      // Telemetry must never take the daemon down.
+    } finally {
+      _pingInFlight = false;
+    }
+  }
+
+  /// Builds the local queue of days that still need a heartbeat.
+  void _ensureOutbox(Map<String, dynamic> config, DateTime nowUtc) {
+    final today = _utcDate(nowUtc);
+    final todayDate = DateTime.parse('${today}T00:00:00Z');
+    final earliest =
+        todayDate.subtract(const Duration(days: _maxQueuedDays - 1));
+
+    // Migration from beta.6 and older: last_ping_date was written *before*
+    // the network call, so it is only evidence of an attempt. Trust it rather
+    // than double-counting an install on upgrade day.
+    if (config['last_ping_success'] == null) {
+      final legacy = config['last_ping_date'];
+      if (legacy is String && _dateOnly(legacy) != null) {
+        config['last_ping_success'] = legacy;
+      }
+    }
+
+    final successRaw = config['last_ping_success'];
+    final successDate = successRaw is String ? _dateOnly(successRaw) : null;
+    if (successRaw != null && successDate == null) {
+      // Old/corrupt value: drop it rather than trusting an invalid date.
+      config.remove('last_ping_success');
+    }
+    final success = successDate == null ? null : _utcDate(successDate);
+
+    final queued = _outbox(config)
+      ..removeWhere((entry) {
+        final date = entry['date'];
+        if (date is! String) return true;
+        final parsed = _dateOnly(date);
+        if (parsed == null) return true;
+        if (parsed.isBefore(earliest) || parsed.isAfter(todayDate)) return true;
+        if (success != null && date.compareTo(success) <= 0) return true;
+        return false;
+      });
+
+    // Only enqueue *today*. Missing days are not invented: if the daemon was
+    // not running, the install was not active and must not be counted. Queued
+    // failures from previous days (created while the daemon was running) are
+    // already in the list and will be retried on this tick.
+    if (success != today && !queued.any((entry) => entry['date'] == today)) {
+      queued.add(<String, dynamic>{
+        'date': today,
+        'event_id': _generateEventId(),
+        'attempts': 0,
+        'next_attempt_at': 0,
+      });
+    }
+
+    config['ping_outbox'] = queued;
+  }
+
+  List<Map<String, dynamic>> _outbox(Map<String, dynamic> config) {
+    final raw = config['ping_outbox'];
+    if (raw is! List) return <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList();
+  }
+
+  Duration _retryDelay(int attempts) {
+    if (attempts <= 1) return const Duration(minutes: 5);
+    if (attempts == 2) return const Duration(minutes: 15);
+    if (attempts == 3) return const Duration(hours: 1);
+    return const Duration(hours: 6);
+  }
+
+  String _buildChannel() {
+    const define = String.fromEnvironment('SCREENGUARD_CHANNEL');
+    final env = Platform.environment['SCREENGUARD_CHANNEL'];
+    final raw =
+        (_channelOverride ?? (env != null && env.isNotEmpty ? env : define))
+            .trim()
+            .toLowerCase();
+
+    if (raw == 'dev' || raw == 'local' || raw == 'development') return 'dev';
+    if (raw == 'beta' || raw == 'prerelease') return 'beta';
+    if (raw == 'stable' || raw == 'release' || raw == 'production') {
+      return 'stable';
+    }
+    return AppVersion.current.contains('-beta') ? 'beta' : 'stable';
+  }
+
+  bool _isCi() {
+    final ci = Platform.environment['CI'];
+    return ci == 'true' || ci == '1';
+  }
+
+  static DateTime? _dateOnly(String value) {
+    if (value.length != 10) return null;
+    final parsed = DateTime.tryParse('${value}T00:00:00Z');
+    if (parsed == null) return null;
+    // Reject dates that parse but normalize (e.g. 2026-02-30).
+    return _utcDate(parsed) == value ? parsed : null;
+  }
+
+  static String _utcDate(DateTime dateTime) {
+    final utc = dateTime.toUtc();
+    final month = utc.month.toString().padLeft(2, '0');
+    final day = utc.day.toString().padLeft(2, '0');
+    return '${utc.year.toString().padLeft(4, '0')}-$month-$day';
   }
 
   // ── Crash Recording ───────────────────────────────────────────────────────
@@ -276,7 +504,8 @@ class CrashReporter {
   void recordUncleanShutdown() {
     recordCrash(
       source: 'daemon',
-      error: 'Unclean shutdown detected — daemon did not exit gracefully on previous run.',
+      error:
+          'Unclean shutdown detected — daemon did not exit gracefully on previous run.',
       extra: {'type': 'unclean_shutdown'},
       reportToSentry: false,
     );
