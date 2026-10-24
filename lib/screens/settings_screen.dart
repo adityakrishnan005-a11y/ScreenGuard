@@ -1447,11 +1447,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   contentPadding: EdgeInsets.zero,
                   secondary: const Icon(Icons.cloud_upload_outlined),
                   title: const Text(
-                    'Send Anonymous Crash Reports',
+                    'Send Anonymous Diagnostics',
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: const Text(
-                    'Automatically transmit error traces and version info to the developer via Sentry. Strictly anonymous — no personal or screen time data is ever collected.',
+                    'Transmit crash traces and a once-daily active-install ping to the developer via Sentry. Strictly anonymous — no screen-time data, app names, window titles, URLs, or account details are ever collected.',
                     style: TextStyle(fontSize: 12),
                   ),
                   value: _crashReportingEnabled,

@@ -69,7 +69,8 @@ In the spirit of open-source transparency and clear attribution, here is the exa
 
 ### 5. 100% Private & Local Storage
 * Session logs are stored locally in SQLite (`~/.local/share/screenguard/usage.db`) in WAL journal mode.
-* No data ever leaves your computer. No cloud accounts, telemetry, or third-party tracking.
+* Your screen-time data never leaves your computer. No cloud accounts and no third-party tracking.
+* Anonymous diagnostics are **opt-out**: crash traces and a once-daily active-install ping (random install ID, version, distro/desktop only). Disable them in **Settings → Send Anonymous Diagnostics**.
 
 ---
 
@@ -157,8 +158,9 @@ sudo pacman -Sy && sudo pacman -S screenguard
 
 ### Data & Privacy
 
-* All session data is stored **locally** in a SQLite database at `~/.local/share/screenguard/usage.db` (WAL mode).
-* No cloud sync, no accounts, no telemetry. Your screen-time data never leaves your machine.
+* All session data is stored **locally** in a SQLite database at `~/.local/share/screenguard/usage.db` (WAL mode). Screen-time data, app names, window titles, and URLs never leave your machine.
+* **Anonymous diagnostics are on by default and can be turned off.** ScreenGuard sends crash traces and one "active install" ping per day to Sentry. The ping contains a random install ID, the ScreenGuard version, distribution/desktop environment, display server, and build channel. Crash traces add the error message and stack trace. The payload contains no screen-time data, app names, window titles, URLs, file names, usernames, machine identifiers, or IP address. Sentry currently retains events for 30 days.
+* To disable diagnostics, turn off **Settings → Send Anonymous Diagnostics**. Doing so stops both crash reports and the daily ping.
 
 ---
 
