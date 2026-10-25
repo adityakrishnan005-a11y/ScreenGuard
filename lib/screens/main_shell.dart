@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:screenguard/screens/dashboard.dart';
 import 'package:screenguard/screens/focus_screen.dart';
+import 'package:screenguard/services/daemon_service.dart';
+import 'package:screenguard/services/db.dart';
+import 'package:screenguard/services/feedback_service.dart';
+import 'package:screenguard/services/update_checker.dart';
+import 'package:screenguard/widgets/daemon_prompt_dialog.dart';
+import 'package:screenguard/widgets/daemon_status_banner.dart';
+import 'package:screenguard/widgets/feedback_dialog.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -18,11 +26,52 @@ class _MainShellState extends State<MainShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final daemonService = Provider.of<DaemonService>(context, listen: false);
+      final db = Provider.of<DatabaseService>(context, listen: false);
+
+      // The daemon setup prompt comes first — two dialogs must never
+      // stack on top of each other.
+      await DaemonPromptDialog.showIfNeeded(context, daemonService, db);
+      if (!mounted) return;
+
+      // Post-update banner: if the binary changed since the last run (any
+      // install medium — rpm/deb/tarball/manual), announce it once.
+      final updatedTo = UpdateChecker.updateNoticeOnStartup(db);
+      if (updatedTo != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ScreenGuard updated to $updatedTo ✓'),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+
+      // Feedback request from the maintainer, if one is waiting.
+      if (!daemonService.isRunning) {
+        // No daemon to look it up for us — fetch it here (once a day).
+        await FeedbackService(db: db).checkIfDue();
+        if (!mounted) return;
+      }
+      await FeedbackDialog.showIfNeeded(context, db);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      body: Column(
+        children: [
+          const DaemonStatusBanner(),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _pages,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,

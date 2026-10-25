@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:screenguard/services/app_killer.dart';
 import 'package:screenguard/services/db.dart';
 import 'package:screenguard/widgets/app_limit_dialog.dart';
 import 'package:screenguard/screens/dashboard.dart';
@@ -8,12 +9,33 @@ import 'package:screenguard/utils/format.dart';
 class TimesUpScreen extends StatelessWidget {
   final String app;
   final String appName;
+  final int? pid;
 
   const TimesUpScreen({
     super.key,
     required this.app,
     required this.appName,
+    this.pid,
   });
+
+  Future<void> _closeApp(BuildContext context) async {
+    // NOTE: no WM_DELETE here — the focused window is this popup, so that
+    // would close ScreenGuard itself instead of the offending app.
+    final killed = await AppKiller.close(app: app, pid: pid, politeClose: false);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(killed
+              ? '$appName was closed.'
+              : 'Could not close $appName — close it manually.'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +104,31 @@ class TimesUpScreen extends StatelessWidget {
                             ),
                           ),
                           onPressed: () {
+                            db.addTempExtension(app, 60 * 1000);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Added 1 minute to $appName!'),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                            );
+                          },
+                          icon: const Icon(Icons.timer_outlined),
+                          label: const Text('+1 Min'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
                             db.addTempExtension(app, 15 * 60 * 1000);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -94,35 +141,53 @@ class TimesUpScreen extends StatelessWidget {
                             );
                           },
                           icon: const Icon(Icons.more_time_rounded),
-                          label: const Text('Add 15 Minutes'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (_) => AppLimitDialog(
-                                app: app,
-                                appName: appName,
-                                currentLimitMs: limitMs,
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.tune_rounded),
-                          label: const Text('Edit Limit'),
+                          label: const Text('+15 Min'),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => AppLimitDialog(
+                            app: app,
+                            appName: appName,
+                            currentLimitMs: limitMs,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.tune_rounded),
+                      label: const Text('Edit Limit'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () => _closeApp(context),
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text('Close App'),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   SizedBox(
                     width: double.infinity,
                     child: TextButton.icon(

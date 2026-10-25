@@ -29,22 +29,11 @@ class GnomeWaylandBackend implements WindowBackend {
   }
 
   Future<String> _runHelper() async {
-    Process p;
     try {
-      p = await Process.start('python3', [_helperPath()]);
-    } on ProcessException {
-      return '';
-    }
-    try {
-      final out = await p.stdout
-          .transform(utf8.decoder)
-          .join()
-          .timeout(const Duration(seconds: 5));
-      final exitCode = await p.exitCode.timeout(const Duration(seconds: 2));
-      if (exitCode != 0) return '';
-      return out.trim();
-    } on TimeoutException {
-      p.kill();
+      final r = await Process.run('python3', [_helperPath()]).timeout(const Duration(seconds: 2));
+      if (r.exitCode != 0) return '';
+      return (r.stdout as String).trim();
+    } catch (_) {
       return '';
     }
   }
@@ -69,7 +58,10 @@ class GnomeWaylandBackend implements WindowBackend {
           final app = match.group(1)!.trim().toLowerCase();
           final title = match.group(2)!.trim();
           final pid = int.tryParse(match.group(3)!);
-          if (app.isNotEmpty && app != 'unknown') {
+          // Synthetic `window:<N>` ids (Shell for unmatched windows, e.g.
+          // Proton games on old extension builds) carry no identity — treat
+          // as a miss so the AT-SPI helper fallback gets a chance.
+          if (app.isNotEmpty && app != 'unknown' && !app.startsWith('window:')) {
             return WindowInfo(
               app: app,
               rawClass: app,
@@ -191,6 +183,26 @@ class GnomeWaylandBackend implements WindowBackend {
         '/org/gnome/Shell/Extensions/ScreenGuard',
         '--method',
         'org.gnome.Shell.Extensions.ScreenGuard.MinimizeActiveWindow',
+      ]).timeout(const Duration(seconds: 2));
+      if (r.exitCode == 0 && r.stdout.toString().contains('true')) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  @override
+  Future<bool> closeActiveWindow() async {
+    try {
+      final r = await Process.run('gdbus', [
+        'call',
+        '--session',
+        '--dest',
+        'org.gnome.Shell',
+        '--object-path',
+        '/org/gnome/Shell/Extensions/ScreenGuard',
+        '--method',
+        'org.gnome.Shell.Extensions.ScreenGuard.CloseActiveWindow',
       ]).timeout(const Duration(seconds: 2));
       if (r.exitCode == 0 && r.stdout.toString().contains('true')) {
         return true;

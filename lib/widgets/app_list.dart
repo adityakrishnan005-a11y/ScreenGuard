@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:screenguard/services/app_icon.dart';
 import 'package:screenguard/utils/format.dart';
 
 class AppListTile extends StatelessWidget {
@@ -7,6 +11,7 @@ class AppListTile extends StatelessWidget {
   final int maxMs;
   final Color color;
   final VoidCallback? onTap;
+  final String? iconPath;
 
   const AppListTile({
     super.key,
@@ -15,7 +20,47 @@ class AppListTile extends StatelessWidget {
     required this.maxMs,
     this.color = Colors.teal,
     this.onTap,
+    this.iconPath,
   });
+
+  Widget _letterAvatar(Color color, String initial) {
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: color.withValues(alpha: 0.18),
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
+  Widget _leading(Color color, String initial) {
+    final path = iconPath;
+    if (path == null) return _letterAvatar(color, initial);
+    final Widget image = AppIconService.isSvg(path)
+        ? SvgPicture.file(
+            File(path),
+            width: 32,
+            height: 32,
+            fit: BoxFit.cover,
+          )
+        : Image.file(
+            File(path),
+            width: 32,
+            height: 32,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _letterAvatar(color, initial),
+          );
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: ClipOval(child: image),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,18 +78,7 @@ class AppListTile extends StatelessWidget {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        leading: CircleAvatar(
-          radius: 16,
-          backgroundColor: color.withValues(alpha: 0.18),
-          child: Text(
-            initial,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
-          ),
-        ),
+        leading: _leading(color, initial),
         title: Row(
           children: [
             Expanded(

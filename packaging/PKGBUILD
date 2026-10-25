@@ -1,6 +1,6 @@
 # Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
 pkgname=screenguard
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Screen time tracker for Linux (Flutter GUI + Dart daemon)"
 arch=('x86_64')
@@ -15,33 +15,43 @@ optdepends=(
 provides=('screenguard')
 conflicts=('screenguard-git')
 source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/$pkgname-$pkgver-x86_64.tar.gz")
-sha256sums=('b388c96086ace8dd23650c1498bd379560ba6f1628fa63f8c65a512606b3a770')
+sha256sums=('2bb0e380e835a57417e605c09fe37e0589fd676ca2a80318137e07b8acac6e6c')
 
 package() {
-  cd "$srcdir/screenguard"
+  # The release tarball has no top-level directory; it contains the app bundle
+  # plus the native helpers. Service, desktop, extension and helper-script
+  # files come from this repository checkout.
+  cd "$srcdir"
+  local repo_root="$startdir/.."
 
   # Core application bundle -> /opt/screenguard
   install -d "$pkgdir/opt/screenguard"
   cp -a screenguard screenguard-daemon data lib "$pkgdir/opt/screenguard/"
+  for helper in screenguard-watchdog screenguard-notify screenguard-killer; do
+    [ -f "$srcdir/$helper" ] && install -Dm755 "$srcdir/$helper" "$pkgdir/opt/screenguard/$helper"
+  done
 
   # App icon
-  install -Dm644 linux/resources/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/screenguard.png"
+  install -Dm644 "$repo_root/linux/resources/icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/screenguard.png"
 
   # Executable symlinks in PATH
   install -d "$pkgdir/usr/bin"
-  ln -s /opt/screenguard/screenguard "$pkgdir/usr/bin/screenguard"
-  ln -s /opt/screenguard/screenguard-daemon "$pkgdir/usr/bin/screenguard-daemon"
+  for bin in screenguard screenguard-daemon screenguard-watchdog screenguard-notify screenguard-killer; do
+    [ -e "$pkgdir/opt/screenguard/$bin" ] && ln -s "/opt/screenguard/$bin" "$pkgdir/usr/bin/$bin"
+  done
 
-  # systemd user service + desktop file
-  install -Dm644 linux/screenguard.service "$pkgdir/usr/lib/systemd/user/screenguard.service"
-  install -Dm644 linux/screenguard.desktop "$pkgdir/usr/share/applications/screenguard.desktop"
+  # systemd user service, preset, desktop file and autostart
+  install -Dm644 "$repo_root/linux/screenguard.service" "$pkgdir/usr/lib/systemd/user/screenguard.service"
+  install -Dm644 "$repo_root/linux/50-screenguard.preset" "$pkgdir/usr/lib/systemd/user-preset/50-screenguard.preset"
+  install -Dm644 "$repo_root/linux/screenguard.desktop" "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm644 "$repo_root/linux/screenguard-autostart.desktop" "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"
 
   # Helper scripts
-  install -Dm755 bin/active_window_helper.py "$pkgdir/usr/share/screenguard/active_window_helper.py"
-  install -Dm755 tools/enable_fedora_a11y.sh "$pkgdir/usr/share/screenguard/enable_fedora_a11y.sh"
+  install -Dm755 "$repo_root/bin/active_window_helper.py" "$pkgdir/usr/share/screenguard/active_window_helper.py"
+  install -Dm755 "$repo_root/tools/enable_fedora_a11y.sh" "$pkgdir/usr/share/screenguard/enable_fedora_a11y.sh"
 
   # GNOME Shell extension
   install -d "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app"
-  install -Dm644 extension/metadata.json "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json"
-  install -Dm755 extension/extension.js "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/extension.js"
+  install -Dm644 "$repo_root/extension/metadata.json" "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json"
+  install -Dm755 "$repo_root/extension/extension.js" "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/extension.js"
 }

@@ -1,13 +1,16 @@
 [Unit]
-Description=ScreenGuard Tracker
-After=graphical-session.target
+Description=ScreenGuard Tracker Daemon
 PartOf=graphical-session.target
+After=graphical-session.target
 
 [Service]
 Type=simple
 ExecStart=/usr/bin/screenguard-daemon
-Restart=on-failure
-RestartSec=5
+# Our SIGTERM handler exits in milliseconds; a short stop timeout keeps
+# logout/reboot snappy instead of hanging on a wedged daemon.
+TimeoutStopSec=10
+Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=graphical-session.target

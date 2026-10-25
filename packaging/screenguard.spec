@@ -1,5 +1,5 @@
 Name:           screenguard
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Digital Wellbeing for Linux — Screen Time Tracking, Daily App Limits & Focus Mode
 License:        GPL-3.0-or-later
@@ -53,6 +53,7 @@ install -Dm644 linux/screenguard.service %{buildroot}%{_userunitdir}/screenguard
 
 # .desktop launcher
 install -Dm644 linux/screenguard.desktop %{buildroot}%{_datadir}/applications/screenguard.desktop
+install -Dm644 linux/screenguard-autostart.desktop %{buildroot}%{_sysconfdir}/xdg/autostart/screenguard-autostart.desktop
 
 # Helper scripts
 install -Dm755 bin/active_window_helper.py %{buildroot}%{_datadir}/screenguard/active_window_helper.py
@@ -71,6 +72,7 @@ install -Dm755 extension/extension.js %{buildroot}%{_datadir}/gnome-shell/extens
 %{_bindir}/screenguard-daemon
 %{_userunitdir}/screenguard.service
 %{_datadir}/applications/screenguard.desktop
+%{_sysconfdir}/xdg/autostart/screenguard-autostart.desktop
 %{_datadir}/icons/hicolor/256x256/apps/screenguard.png
 %{_datadir}/screenguard/
 %{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/
@@ -82,6 +84,13 @@ install -Dm755 extension/extension.js %{buildroot}%{_datadir}/gnome-shell/extens
 %systemd_user_preun screenguard.service
 
 %changelog
+* Sun Oct 25 2026 Aditya Krishnan <aditya.krishnan005@gmail.com> - 0.1.1-1
+- v0.1.1 stable: reliable daily active-install telemetry with dev/CI exclusion
+- Clean shutdown on SIGTERM, SIGINT and SIGHUP; no false crash reports on logout
+- Installer restart-loop fix and hardened update handoff
+- Focus Mode distraction-list cache fix
+- Opt-out anonymous diagnostics disclosed in README, Settings and wiki
+- Version-gated in-app feedback requests; orphaned sessions closed on next start
 * Mon Aug 17 2026 Aditya Krishnan <aditya.krishnan005@gmail.com> - 0.1.0-1
 - Initial release of ScreenGuard v0.1.0
 - Digital Wellbeing Dashboard with weekly charts and 30-day totals

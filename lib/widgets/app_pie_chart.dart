@@ -34,11 +34,51 @@ class _AppPieChartState extends State<AppPieChart> {
     final totalMs = activeMs + idleMs;
 
     if (totalMs == 0) {
-      return const Center(
-          child: Padding(
-        padding: EdgeInsets.all(24.0),
-        child: Text('No active usage today', style: TextStyle(color: Colors.grey)),
-      ));
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return SizedBox(
+        height: 186,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              height: 110,
+              width: 110,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    height: 84,
+                    width: 84,
+                    child: CircularProgressIndicator(
+                      value: 1.0,
+                      strokeWidth: 12,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.06),
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.pie_chart_outline_rounded,
+                    size: 28,
+                    color: Theme.of(context).disabledColor.withValues(alpha: 0.5),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No active usage recorded',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).disabledColor,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     final sections = <PieChartSectionData>[];

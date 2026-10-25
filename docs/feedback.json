@@ -1,0 +1,22 @@
+{
+  "id": "feedback-2026-10",
+  "min_version": "0.1.1-beta.4",
+  "max_version": "0.1.1",
+  "expires": "2026-12-31",
+  "title": "Help shape ScreenGuard",
+  "body": "You have been running ScreenGuard. Before 1.0 ships, a couple of minutes of feedback would genuinely change what gets built next: what works well for you, and what is broken or missing.",
+  "actions": [
+    {
+      "label": "Give feedback",
+      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/5"
+    },
+    {
+      "label": "Start a new discussion",
+      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/new"
+    },
+    {
+      "label": "Report a bug",
+      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/issues/new?labels=bug"
+    }
+  ]
+}

@@ -13,6 +13,13 @@ const DBusInterface = `
     <method name="MinimizeActiveWindow">
       <arg type="b" direction="out" name="success"/>
     </method>
+    <method name="CloseActiveWindow">
+      <arg type="b" direction="out" name="success"/>
+    </method>
+    <method name="CloseWindowByPid">
+      <arg type="i" direction="in" name="pid"/>
+      <arg type="b" direction="out" name="success"/>
+    </method>
     <method name="ListAllWindows">
       <arg type="a(ssi)" direction="out" name="windows"/>
     </method>
@@ -62,8 +69,11 @@ export default class ScreenGuardExtension extends Extension {
                 }
             }
 
-            // Fallback: use WM_CLASS if the tracker gave us nothing.
-            if (!app) {
+            // Fallback: use WM_CLASS if the tracker gave us nothing usable.
+            // NOTE: windows matching no .desktop file (e.g. Proton/Steam
+            // games) get a synthetic `window:<N>` tracker id — useless for
+            // tracking, so those fall through to WM_CLASS as well.
+            if (!app || app.startsWith('window:')) {
                 app = win.get_wm_class() || win.get_gtk_application_id() || '';
             }
 
@@ -81,11 +91,60 @@ export default class ScreenGuardExtension extends Extension {
         try {
             const win = global.display.focus_window;
             if (win) {
+                // Fullscreen windows (typical for games) ignore minimize()
+                // unless they leave fullscreen first.
+                try {
+                    if (typeof win.is_fullscreen === 'function' && win.is_fullscreen()) {
+                        win.unmake_fullscreen();
+                    }
+                } catch (e) {
+                    console.error(`[ScreenGuard] Error leaving fullscreen: ${e}`);
+                }
                 win.minimize();
+                // Report the real outcome so callers know if it worked.
+                try {
+                    if (typeof win.minimized !== 'undefined') {
+                        return win.minimized === true;
+                    }
+                } catch (e) {
+                    console.error(`[ScreenGuard] Error reading minimized state: ${e}`);
+                }
                 return true;
             }
         } catch (e) {
             console.error(`[ScreenGuard] Error in MinimizeActiveWindow: ${e}`);
+        }
+        return false;
+    }
+
+    CloseActiveWindow() {
+        try {
+            const win = global.display.focus_window;
+            if (win) {
+                win.delete(global.get_current_time());
+                return true;
+            }
+        } catch (e) {
+            console.error(`[ScreenGuard] Error in CloseActiveWindow: ${e}`);
+        }
+        return false;
+    }
+
+    CloseWindowByPid(targetPid) {
+        try {
+            const actors = global.get_window_actors ? global.get_window_actors() : [];
+            let closed = false;
+            for (const actor of actors) {
+                const win = actor.meta_window;
+                if (!win) continue;
+                if (win.get_pid() === targetPid) {
+                    win.delete(global.get_current_time());
+                    closed = true;
+                }
+            }
+            return closed;
+        } catch (e) {
+            console.error(`[ScreenGuard] Error in CloseWindowByPid: ${e}`);
         }
         return false;
     }
@@ -99,7 +158,8 @@ export default class ScreenGuardExtension extends Extension {
                 const win = actor.meta_window;
                 if (!win) continue;
 
-                // Same logic as GetActiveWindow: prefer tracker app ID.
+                // Same logic as GetActiveWindow: prefer tracker app ID,
+                // but ignore synthetic `window:<N>` ids (unmatched windows).
                 let app = '';
                 if (tracker) {
                     const appObj = tracker.get_window_app(win);
@@ -110,7 +170,7 @@ export default class ScreenGuardExtension extends Extension {
                         }
                     }
                 }
-                if (!app) {
+                if (!app || app.startsWith('window:')) {
                     app = win.get_wm_class() || win.get_gtk_application_id() || '';
                 }
 

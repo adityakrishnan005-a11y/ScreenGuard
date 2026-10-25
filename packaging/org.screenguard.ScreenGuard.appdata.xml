@@ -24,16 +24,17 @@
   <screenshots>
     <screenshot type="default">
       <caption>ScreenGuard Digital Wellbeing Dashboard</caption>
-      <image type="source">https://raw.githubusercontent.com/adityakrishnan/screenguard/main/docs/assets/dashboard.png</image>
+      <image type="source">https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/main/docs/assets/dashboard.png</image>
     </screenshot>
   </screenshots>
 
-  <url type="homepage">https://github.com/adityakrishnan/screenguard</url>
-  <url type="bugtracker">https://github.com/adityakrishnan/screenguard/issues</url>
+  <url type="homepage">https://github.com/adityakrishnan005-a11y/ScreenGuard</url>
+  <url type="bugtracker">https://github.com/adityakrishnan005-a11y/ScreenGuard/issues</url>
 
   <developer_name>Aditya Krishnan</developer_name>
 
   <releases>
+    <release version="0.1.1" date="2026-10-25"/>
     <release version="0.1.0" date="2026-08-16"/>
   </releases>
 

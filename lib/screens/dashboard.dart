@@ -2,13 +2,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/services/app_icon.dart';
 import 'package:screenguard/widgets/usage_bar.dart';
 import 'package:screenguard/widgets/app_list.dart';
 import 'package:screenguard/widgets/day_chart.dart';
 import 'package:screenguard/widgets/app_pie_chart.dart';
 import 'package:screenguard/widgets/delta_badge.dart';
+import 'package:screenguard/widgets/daily_goal_dialog.dart';
 import 'package:screenguard/utils/format.dart';
 import 'package:screenguard/screens/app_detail.dart';
+import 'package:screenguard/screens/settings_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -23,7 +26,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _idleToday = 0;
   List<Map<String, dynamic>> _perApp = [];
   List<Map<String, dynamic>> _weekData = [];
-  final int _goal = 8 * 3600 * 1000;
+  int _goal = 0;
   bool _showHint = true;
   int _untracked = 0;
   StreamSubscription? _sub;
@@ -71,7 +74,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _perApp = db.perAppForDate(_selectedDate);
       _idleToday = db.getIdleTimeForDate(_selectedDate);
       _untracked = db.recentUnknownSessions();
+      _goal = db.getDailyGoalMs();
     });
+  }
+
+  Future<void> _showSetGoalDialog() async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (context) => DailyGoalDialog(currentGoalMs: _goal),
+    );
+    if (changed == true && mounted) {
+      _load();
+    }
   }
 
   @override
@@ -83,6 +97,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('ScreenGuard — Digital Wellbeing for Linux', style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Notifications & Sounds',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => SettingsScreen(db: context.read<DatabaseService>()),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async => _load(),
@@ -106,6 +134,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               flex: isWide ? 3 : 1,
                               child: _buildHeroCard(
                                 title: 'Today',
+                                action: OutlinedButton.icon(
+                                  onPressed: _showSetGoalDialog,
+                                  icon: const Icon(Icons.flag_outlined, size: 14),
+                                  label: Text(
+                                    _goal > 0 ? 'Edit daily goal' : 'Set daily goal',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -126,8 +170,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         DeltaBadge(current: _today, previous: _yesterday),
                                       ],
                                     ),
-                                    const SizedBox(height: 12),
-                                    UsageBar(usedMs: _today, goalMs: _goal),
+                                    if (_goal > 0) ...[
+                                      const SizedBox(height: 12),
+                                      UsageBar(usedMs: _today, goalMs: _goal),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -295,6 +341,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ms: (a['t'] as int?) ?? 0,
                       maxMs: maxApp,
                       color: color,
+                      iconPath: AppIconService.resolve(a['app'] as String),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => AppDetailScreen(
                           app: a['app'] as String,
@@ -391,7 +438,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.35),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -438,7 +485,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildHeroCard({required String title, required Widget child}) {
+  Widget _buildHeroCard({required String title, required Widget child, Widget? action}) {
     return Card(
       elevation: 0.5,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -448,13 +495,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).textTheme.bodySmall?.color,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+                ),
+                if (action != null) action,
+              ],
             ),
             const SizedBox(height: 12),
             child,
