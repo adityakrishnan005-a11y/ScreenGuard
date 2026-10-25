@@ -1,7 +1,7 @@
 # Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
 pkgname=screenguard
 pkgver=0.1.1
-pkgrel=1
+pkgrel=2
 pkgdesc="Screen time tracker for Linux (Flutter GUI + Dart daemon)"
 arch=('x86_64')
 url="https://github.com/adityakrishnan005-a11y/ScreenGuard"

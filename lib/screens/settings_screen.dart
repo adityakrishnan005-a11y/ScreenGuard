@@ -1812,6 +1812,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             if (mounted) {
                               setState(() => _isInstallingUpdate = false);
                               if (result.success) {
+                                // Dismiss the update badge so the UI no
+                                // longer shows "Update Available" (matters
+                                // for rpm/deb installs where the GUI stays
+                                // alive after pkexec returns).
+                                _updateChecker.dismissedVersion = latestVersion;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(

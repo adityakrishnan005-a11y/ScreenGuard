@@ -1,6 +1,6 @@
 Name:           screenguard
 Version:        0.1.1
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Digital Wellbeing for Linux - Screen Time Tracking, Daily App Limits & Focus Mode
 License:        GPL-3.0-or-later
 URL:            https://github.com/adityakrishnan005-a11y/ScreenGuard
@@ -111,6 +111,11 @@ install -Dm644 %{SOURCE12} README.md
 %systemd_user_preun screenguard.service
 
 %changelog
+* Sun Oct 25 2026 Aditya Krishnan <aditya.krishnan005@gmail.com> - 0.1.1-2
+- Fix in-app update download path corruption ($tmpDir Directory.toString())
+- Fix update checker version identity using AppVersion.current
+- Fix periodic check scheduler ignoring 'never' frequency
+- Dismiss update badge in UI upon successful package install
 * Sun Oct 25 2026 Aditya Krishnan <aditya.krishnan005@gmail.com> - 0.1.1-1
 - v0.1.1 stable: reliable daily active-install telemetry with dev/CI exclusion
 - Clean shutdown on SIGTERM, SIGINT and SIGHUP; no false crash reports on logout

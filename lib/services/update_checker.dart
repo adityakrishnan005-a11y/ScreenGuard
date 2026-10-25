@@ -33,7 +33,7 @@ class UpdateChecker {
   static const String _repoOwner = 'adityakrishnan005-a11y';
   static const String _repoName = 'screenguard';
   static const String _apiBase = 'https://api.github.com/repos/$_repoOwner/$_repoName/releases';
-  static const String _currentVersion = AppVersion.value;
+  static const String _currentVersion = AppVersion.current;
 
   final DatabaseService db;
   Timer? _checkTimer;
@@ -132,11 +132,17 @@ class UpdateChecker {
   void startPeriodicChecks() {
     if (!checkUpdatesEnabled) return;
 
+    final freq = checkFrequency;
+    if (freq == 'never') return;
+
+    // Cancel any existing timer to prevent double-stacking if called twice.
+    _checkTimer?.cancel();
+
     // Check on startup if enough time has passed
     _checkIfDue();
 
     // Then set a timer to check periodically
-    final interval = checkFrequency == 'weekly'
+    final interval = freq == 'weekly'
         ? const Duration(hours: 24)  // check daily; _checkIfDue gates the actual API call
         : const Duration(hours: 12);
 
@@ -152,11 +158,13 @@ class UpdateChecker {
   void _checkIfDue() {
     if (!checkUpdatesEnabled) return;
 
+    final freq = checkFrequency;
+    if (freq == 'never') return;
+
     final last = lastCheckTime;
     if (last.isNotEmpty) {
       final lastTime = DateTime.tryParse(last);
       if (lastTime != null) {
-        final freq = checkFrequency;
         final threshold = freq == 'weekly'
             ? const Duration(days: 7)
             : const Duration(days: 1);
@@ -315,7 +323,7 @@ class UpdateChecker {
       tmpDir.createSync(recursive: true);
 
       final fileName = assetUrl.split('/').last;
-      if (!await _downloadTo(assetUrl, '$tmpDir/$fileName')) {
+      if (!await _downloadTo(assetUrl, '${tmpDir.path}/$fileName')) {
         return (success: false, note: 'Could not download the update.');
       }
 
@@ -343,14 +351,14 @@ class UpdateChecker {
           ok = r.exitCode == 0;
         } catch (_) {}
         if (ok) {
-          return (success: true, note: 'Installed via $args[0] —');
+          return (success: true, note: 'Installed via ${args[0]} —');
         }
         return (success: false, note: manual);
       }
 
       // ── Tarball installs: extract + install.sh ─────────────────────────
       final extractResult = await Process.run(
-        'tar', ['-xzf', '$tmpDir/$fileName', '-C', tmpDir.path],
+        'tar', ['-xzf', '${tmpDir.path}/$fileName', '-C', tmpDir.path],
       );
       if (extractResult.exitCode != 0) {
         return (success: false, note: 'Could not extract the update.');
