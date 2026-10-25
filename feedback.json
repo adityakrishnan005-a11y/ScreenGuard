@@ -1,4 +1,22 @@
 {
-  "id": "feedback-2026-10",
-  "expires": "2020-01-01"
+  "id": "notice-v0.1.1-release2",
+  "min_version": "0.1.1-beta.4",
+  "max_version": "0.1.1",
+  "expires": "2027-01-31",
+  "title": "ScreenGuard v0.1.1 — Action Required",
+  "body": "Important: If you are on beta.4+ or v0.1.1 (Release 1), please update to v0.1.1 Release 2 using your system package manager (apt, dnf, pacman) or by downloading the package from GitHub.\n\nA minor download-path issue was identified in the in-app updater that prevented background update archives from saving properly. Release 2 resolves this completely.\n\nKey highlights in this release:\n• Full Settings Hub — Light/Dark/System themes, custom audio cues, data management\n• Daily Screen-Time Goals — Visual goal bar, 50%/100%/overtime milestone alerts\n• Pomodoro Focus Cycles — Work/break alternation, pause/resume, cycle counter\n• Safe Focus Enforcement — Minimization & persistent warning dialogs protect unsaved work\n• Steam & Proton Support — Native game titles, custom icons, proper process handling\n• C Native Helpers — Direct D-Bus notifications, robust process management, and watchdog\n\nHow is the new release working for you? We would love to hear what you like and what needs improvement!",
+  "actions": [
+    {
+      "label": "Get Release 2 (Download & Install)",
+      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/tag/v0.1.1"
+    },
+    {
+      "label": "Share Feedback",
+      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/5"
+    },
+    {
+      "label": "Report an Issue",
+      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/issues/new?labels=bug"
+    }
+  ]
 }
