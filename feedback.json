@@ -1,18 +1,4 @@
 {
   "id": "feedback-v0.1.1-stable",
-  "min_version": "0.1.1",
-  "max_version": "0.1.1",
-  "expires": "2027-01-31",
-  "title": "You're on v0.1.1 stable 🎉",
-  "body": "ScreenGuard v0.1.1 is the first major update since launch — daily goals, Pomodoro cycles, Steam game support, native notifications, and more. If something feels off or you have ideas for what should come next, a quick note would really help shape the road to 1.0.",
-  "actions": [
-    {
-      "label": "Give feedback",
-      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/5"
-    },
-    {
-      "label": "Report a bug",
-      "url": "https://github.com/adityakrishnan005-a11y/ScreenGuard/issues/new?labels=bug"
-    }
-  ]
+  "expires": "2020-01-01"
 }
