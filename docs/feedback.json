@@ -1,10 +1,10 @@
 {
   "id": "feedback-2026-10",
   "min_version": "0.1.1-beta.4",
-  "max_version": "0.1.1-beta.99",
+  "max_version": "0.1.1",
   "expires": "2026-12-31",
   "title": "Help shape ScreenGuard",
-  "body": "You have been running one of the ScreenGuard betas. Before 1.0 ships, a couple of minutes of feedback would genuinely change what gets built next: what works well for you, and what is broken or missing.",
+  "body": "You have been running ScreenGuard. Before 1.0 ships, a couple of minutes of feedback would genuinely change what gets built next: what works well for you, and what is broken or missing.",
   "actions": [
     {
       "label": "Give feedback",

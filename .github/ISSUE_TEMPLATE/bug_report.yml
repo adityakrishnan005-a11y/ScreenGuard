@@ -35,8 +35,8 @@ body:
     id: app-version
     attributes:
       label: ScreenGuard Version & Install Method
-      description: e.g., v0.1.0 (from DNF Copr), v0.1.1-beta.4 (.deb package), or custom build
-      placeholder: "v0.1.0 via DNF Copr"
+      description: e.g., v0.1.1 (from DNF Copr), v0.1.1-beta.6 (.deb package), or custom build
+      placeholder: "v0.1.1 via DNF Copr"
     validations:
       required: true
 

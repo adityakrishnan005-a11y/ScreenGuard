@@ -38,7 +38,7 @@ When creating a new issue, please use our issue templates and include:
 * **Linux Distribution & Version** (e.g., Fedora 41, Ubuntu 24.04, Arch Linux).
 * **Desktop Environment & Version** (e.g., GNOME 47, KDE Plasma 6.2, XFCE 4.18).
 * **Display Server** (Wayland or X11 — run `echo $XDG_SESSION_TYPE`).
-* **ScreenGuard Version** (e.g., `v0.1.0`, `v0.1.1-beta.4`).
+* **ScreenGuard Version** (e.g., `v0.1.1`, `v0.1.1-beta.6`).
 * **Steps to Reproduce** and **Expected vs Actual Behavior**.
 * **Logs & Proof**:
   * For daemon issues: `systemctl --user status screenguard` or running `screenguard-daemon` in a terminal.
@@ -137,4 +137,4 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/) to keep t
    ```bash
    git push origin feature/my-cool-feature
    ```
-5. **Open a Pull Request** against the ScreenGuard repository with a clear title and description of the changes.
+5. **Open a Pull Request** against `beta` for feature work, or `main` for documentation and stable-only fixes, with a clear title and description of the changes.

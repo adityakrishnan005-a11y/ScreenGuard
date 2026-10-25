@@ -34,6 +34,8 @@ In the spirit of open-source transparency and clear attribution, here is the exa
 
 ![ScreenGuard Dashboard](docs/assets/dashboard.png)
 
+*Dashboard overview.*
+
 ---
 
 ### 2. Week-by-Week Navigation & History Slider
@@ -42,6 +44,8 @@ In the spirit of open-source transparency and clear attribution, here is the exa
 
 ![Previous Week Navigation](docs/assets/week_history_prev.png)
 ![Next Week Navigation](docs/assets/week_history_next.png)
+
+*Week-by-week history navigation.*
 
 ---
 
@@ -55,22 +59,67 @@ In the spirit of open-source transparency and clear attribution, here is the exa
 
 ![Daily App Limit Dialog](docs/assets/app_limit_dialog.png)
 
+*Daily app limit lockout.*
+
 ---
 
 ### 4. Focus Mode (Pomodoro Timer & Distraction Blocker)
 * **Animated Pomodoro Timer**: Preset sessions (`15m`, `25m`, `45m`, `60m`) with live circular countdown ring.
-* **Distraction Blocker**: Select distracting apps from a searchable checklist. During an active focus session, ScreenGuard automatically minimizes blocked apps if opened.
+* **Pomodoro Cycles & Breaks**: Configure focus/break cycles; the timer automatically switches between focus and break periods.
+* **Distraction Blocker**: Select distracting apps from a searchable app picker with grid or list layout. During an active focus session, ScreenGuard automatically minimizes blocked apps if opened.
+* **Strict Auto-Close (Optional)**: Optionally close blocked apps instead of minimizing them when they are opened during a focus session.
 * **Focus Statistics**: Tracks completed focus sessions per day.
 
-![Focus Mode Timer](docs/assets/focus_mode_timer.png)
+![Focus Mode](docs/assets/focus_mode.webp)
+
+*Focus Mode with app picker. Window transparency is done by Blur My Shell.*
+
 ![Distraction Blocker & Notification](docs/assets/focus_mode_blocker.png)
+
+*Distraction blocker & notification.*
 
 ---
 
-### 5. 100% Private & Local Storage
+### 5. Settings & Controls
+* **General**: Theme mode, desktop notifications, sound effects, custom audio, and alert events.
+* **Limits & Pomodoro**: Pomodoro cycles, break duration, strict auto-close, and blocked-app handling.
+* **Diagnostics**: Daemon status and opt-out anonymous diagnostics.
+* **Updates**: Stable/beta channel, check frequency, and in-app update status.
+* **Data**: Local database size/session count, date-range deletion, specific-date deletion, and clear-all.
+
+> Window transparency in the screenshots below is done by the **Blur My Shell** GNOME extension, not by ScreenGuard.
+
+#### General
+![Settings — General](docs/assets/settings_general.webp)
+
+*Settings → General. Window transparency is done by Blur My Shell.*
+
+#### Limits & Pomodoro
+![Settings — Limits & Pomodoro](docs/assets/settings_limits_pomodoro.webp)
+
+*Settings → Limits & Pomodoro. Window transparency is done by Blur My Shell.*
+
+#### Diagnostics
+![Settings — Diagnostics](docs/assets/settings_diagnostics.webp)
+
+*Settings → Diagnostics. Window transparency is done by Blur My Shell.*
+
+#### Updates
+![Settings — Updates](docs/assets/settings_updates.webp)
+
+*Settings → Updates. Window transparency is done by Blur My Shell.*
+
+#### Data
+![Settings — Data](docs/assets/settings_data.webp)
+
+*Settings → Data. Window transparency is done by Blur My Shell.*
+
+---
+
+### 6. 100% Private & Local Storage
 * Session logs are stored locally in SQLite (`~/.local/share/screenguard/usage.db`) in WAL journal mode.
 * Your screen-time data never leaves your computer. No cloud accounts and no third-party tracking.
-* Anonymous diagnostics are **opt-out**: crash traces and a once-daily active-install ping (random install ID, version, distro/desktop only). Disable them in **Settings → Send Anonymous Diagnostics**.
+* Anonymous diagnostics are **opt-out**: crash traces and a once-daily active-install ping (random install ID, version, distro/desktop only). Disable them in **Settings → Diagnostics → Send Anonymous Diagnostics**.
 
 ---
 
@@ -87,7 +136,7 @@ graph TD
 ```
 
 * **GUI App**: Built using Flutter & Material 3.
-* **Daemon (`screenguard-daemon`)**: Lightweight background service compiling to a single native binary.
+* **Daemon (`screenguard-daemon`)**: Lightweight background service compiling to a single native binary. It is currently written in Dart; the v1.5 roadmap targets a behavior-preserving C port with the same SQLite schema and control interfaces.
 * **Extension (`screenguard@screenguard.app`)**: Native GNOME Shell Extension exporting active window title/class over D-Bus (`org.gnome.Shell.Extensions.ScreenGuard`).
 * **X11 Backend**: Standard EWMH `_NET_ACTIVE_WINDOW` query via `xprop` and window minimization via `xdotool`.
 
@@ -108,7 +157,7 @@ sudo apt update && sudo apt install screenguard
 
 **Option B — standalone `.deb`:**
 ```bash
-wget https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v0.1.0/screenguard_0.1.0_amd64.deb && sudo apt install ./screenguard_0.1.0_amd64.deb -y
+wget https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v0.1.1/screenguard_0.1.1_amd64.deb && sudo apt install ./screenguard_0.1.1_amd64.deb -y
 ```
 
 ### Fedora / RHEL / Rocky Linux (Copr)
@@ -160,7 +209,7 @@ sudo pacman -Sy && sudo pacman -S screenguard
 
 * All session data is stored **locally** in a SQLite database at `~/.local/share/screenguard/usage.db` (WAL mode). Screen-time data, app names, window titles, and URLs never leave your machine.
 * **Anonymous diagnostics are on by default and can be turned off.** ScreenGuard sends crash traces and one "active install" ping per day to Sentry. The ping contains a random install ID, the ScreenGuard version, distribution/desktop environment, display server, and build channel. Crash traces add the error message and stack trace. The payload contains no screen-time data, app names, window titles, URLs, file names, usernames, machine identifiers, or IP address. Sentry currently retains events for 30 days.
-* To disable diagnostics, turn off **Settings → Send Anonymous Diagnostics**. Doing so stops both crash reports and the daily ping.
+* To disable diagnostics, turn off **Settings → Diagnostics → Send Anonymous Diagnostics**. Doing so stops both crash reports and the daily ping.
 
 ---
 
@@ -181,15 +230,20 @@ flutter build linux --release
 dart compile exe bin/daemon.dart -o build/linux/x64/release/bundle/screenguard-daemon
 
 # 4. (Optional) Create .deb and .rpm packages
-nfpm package -f packaging/nfpm.deb.yaml -t dist/screenguard_0.1.0_amd64.deb
-nfpm package -f packaging/nfpm.rpm.yaml -t dist/screenguard-0.1.0-1.x86_64.rpm
+nfpm package -f packaging/nfpm.deb.yaml -t dist/screenguard_0.1.1_amd64.deb
+nfpm package -f packaging/nfpm.rpm.yaml -t dist/screenguard-0.1.1-1.x86_64.rpm
 ```
 
 ---
 
 ## Roadmap & Future Enhancements
 
-I am actively working on expanding ScreenGuard! Here is what is currently planned for upcoming releases:
+The next two milestones are focused on depth rather than breadth:
+
+- **v1.2 — Major UI/UX Refresh**: A substantial pass over the interface and experience — clearer navigation, better accessibility, consistent visual polish, and fewer rough edges. Intentionally feature-light: the goal is to make what already exists feel better, not to add another long feature list.
+- **v1.5 — C Daemon Port**: Rewrite the background daemon in C, using the current Dart implementation as the behavioral reference. The goal is lower runtime overhead and fewer dependencies without changing tracking, limits or Focus Mode behavior.
+
+Beyond those milestones, the following feature work is planned but not yet assigned to a release:
 
 - **Browser Extension (Web Tracking)**: Track active browser tabs (YouTube, Reddit, Docs) separately instead of grouping all browsing under one browser app.
 - **Categorized App Group Limits**: Group multiple apps under a shared limit (e.g. limit all "Social Media" apps to 1h/day combined).
@@ -224,10 +278,10 @@ Open a [GitHub Issue](https://github.com/adityakrishnan005-a11y/ScreenGuard/issu
 
 ## Feedback 💬
 
-Beta users are the reason this project works, and I want to hear from you directly.
+Users — on betas and stable releases — are the reason this project works, and I want to hear from you directly.
 
-* **In the app** — *Settings → General → Send feedback* opens the beta feedback thread, where you can tell me what works and what does not.
-* **On GitHub** — [Discussions](https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions) for questions, ideas and general feedback (start with the [beta feedback thread](https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/5)); [Issues](https://github.com/adityakrishnan005-a11y/ScreenGuard/issues) for bugs.
+* **In the app** — *Settings → General → Send feedback* opens the feedback thread, where you can tell me what works and what does not.
+* **On GitHub** — [Discussions](https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions) for questions, ideas and general feedback (start with the [feedback thread](https://github.com/adityakrishnan005-a11y/ScreenGuard/discussions/5)); [Issues](https://github.com/adityakrishnan005-a11y/ScreenGuard/issues) for bugs.
 * **Feedback requests** — when I need input on a specific decision, ScreenGuard downloads a small public file once a day and shows the request in the app. It is a read-only fetch of a static JSON file: no identifiers, no usage data, nothing leaves your machine except the app version in the request header. The notification can be turned off in *Settings → General*.
 
 > **Reporting a bug?** Please attach a screenshot or video and name your desktop environment and version — especially on X11, so the issue can be reproduced.

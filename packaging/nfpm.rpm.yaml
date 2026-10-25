@@ -1,15 +1,15 @@
 name: screenguard
 arch: amd64
 platform: linux
-version: 0.1.1~beta6
-release: 4
+version: 0.1.1
+release: 1
 section: utils
 priority: optional
 maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
 description: |
   ScreenGuard — Digital Wellbeing for Linux (Screen time tracking, daily app limits & focus mode).
 vendor: ScreenGuard
-homepage: https://example.com/screenguard
+homepage: https://github.com/adityakrishnan005-a11y/ScreenGuard
 license: GPL-3.0
 
 contents:
