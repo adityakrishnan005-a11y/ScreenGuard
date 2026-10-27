@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/theme/app_theme.dart';
 import 'package:screenguard/utils/format.dart';
 
 class DailyGoalDialog extends StatefulWidget {
@@ -54,6 +55,8 @@ class _DailyGoalDialogState extends State<DailyGoalDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final palette = AppPalette.of(context);
     final presets = [
       {'label': '2h', 'ms': 2 * 3600 * 1000},
       {'label': '4h', 'ms': 4 * 3600 * 1000},
@@ -64,11 +67,11 @@ class _DailyGoalDialogState extends State<DailyGoalDialog> {
     ];
 
     return AlertDialog(
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.flag_outlined, color: Colors.teal),
-          SizedBox(width: 8),
-          Text('Set Daily Goal'),
+          Icon(Icons.flag_outlined, color: scheme.primary),
+          const SizedBox(width: 8),
+          const Text('Set Daily Goal'),
         ],
       ),
       content: SingleChildScrollView(
@@ -76,9 +79,9 @@ class _DailyGoalDialogState extends State<DailyGoalDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Set your target daily screen time limit. The dashboard progress bar will reflect your daily usage against this goal.',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
             const Text('Presets:', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -149,10 +152,10 @@ class _DailyGoalDialogState extends State<DailyGoalDialog> {
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 Text(
                   formatDuration(_selectedMs),
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: Colors.teal),
+                      color: scheme.primary),
                 ),
               ],
             ),
@@ -162,7 +165,7 @@ class _DailyGoalDialogState extends State<DailyGoalDialog> {
       actions: [
         if (widget.currentGoalMs > 0)
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: palette.danger),
             onPressed: () {
               final db = Provider.of<DatabaseService>(context, listen: false);
               db.setDailyGoalMs(0);
@@ -174,7 +177,7 @@ class _DailyGoalDialogState extends State<DailyGoalDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: () {
             final db = Provider.of<DatabaseService>(context, listen: false);
             db.setDailyGoalMs(_selectedMs);

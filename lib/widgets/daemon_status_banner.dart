@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:screenguard/services/daemon_service.dart';
 import 'package:screenguard/services/db.dart';
 import 'package:screenguard/screens/settings_screen.dart';
+import 'package:screenguard/theme/app_theme.dart';
+import 'package:screenguard/ui/adaptive.dart';
 
 class DaemonStatusBanner extends StatelessWidget {
   const DaemonStatusBanner({super.key});
@@ -16,96 +18,117 @@ class DaemonStatusBanner extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return Material(
-      color: Colors.red.shade900,
-      elevation: 3,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Colors.red.shade700, width: 1),
-          ),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.warning_amber_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Daemon not working in background — Screen time tracking and limits are inactive.',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12.5,
+    final palette = AppPalette.of(context);
+    final scheme = Theme.of(context).colorScheme;
+
+    final message = Row(
+      children: [
+        Icon(Icons.warning_amber_rounded, color: palette.warning, size: 20),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(
+            'Daemon not working in background — Screen time tracking and limits are inactive.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurface,
                   fontWeight: FontWeight.w600,
                 ),
+          ),
+        ),
+      ],
+    );
+
+    final actions = Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (daemonService.isLoading)
+          const Padding(
+            padding: EdgeInsets.all(AppSpacing.sm),
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else ...[
+          FilledButton.tonal(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
               ),
             ),
-            const SizedBox(width: 12),
-            if (daemonService.isLoading)
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            else ...[
-              // Quick Start
-              FilledButton.tonal(
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.red.shade900,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  visualDensity: VisualDensity.compact,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: () => daemonService.startDaemon(enableAutostart: false),
-                child: const Text(
-                  'Start Now',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
+            onPressed: () => daemonService.startDaemon(enableAutostart: false),
+            child: const Text('Start now'),
+          ),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
               ),
-              const SizedBox(width: 8),
-              // Always Autostart
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white70),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  visualDensity: VisualDensity.compact,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+            ),
+            onPressed: () => daemonService.startDaemon(enableAutostart: true),
+            child: const Text('Autostart always'),
+          ),
+          IconButton(
+            tooltip: 'Daemon settings',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.settings_outlined, size: 18),
+            onPressed: () {
+              final scope = MainShellScope.maybeOf(context);
+              if (scope != null) {
+                scope.goToTab(3);
+                return;
+              }
+              final db = Provider.of<DatabaseService>(context, listen: false);
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => SettingsScreen(db: db, initialTabIndex: 2),
                 ),
-                onPressed: () => daemonService.startDaemon(enableAutostart: true),
-                child: const Text(
-                  'Autostart Always',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
-                ),
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                tooltip: 'Daemon Settings',
-                icon: const Icon(Icons.settings_outlined, color: Colors.white70, size: 18),
-                visualDensity: VisualDensity.compact,
-                onPressed: () {
-                  final db = Provider.of<DatabaseService>(context, listen: false);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (ctx) => SettingsScreen(db: db, initialTabIndex: 2),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ],
+              );
+            },
+          ),
+        ],
+      ],
+    );
+
+    return Material(
+      color: palette.warning.withValues(alpha: 0.12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: palette.warning.withValues(alpha: 0.25)),
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 760) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  message,
+                  const SizedBox(height: AppSpacing.sm),
+                  actions,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: message),
+                const SizedBox(width: AppSpacing.lg),
+                actions,
+              ],
+            );
+          },
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:screenguard/theme/app_theme.dart';
 import 'package:screenguard/utils/format.dart';
 
 class UsageBar extends StatelessWidget {
@@ -9,6 +10,10 @@ class UsageBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (goalMs <= 0) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    final palette = AppPalette.of(context);
+    final track = scheme.surfaceContainerHighest;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -23,24 +28,27 @@ class UsageBar extends StatelessWidget {
                 height: 10,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(6),
+                  color: track,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
                 alignment: Alignment.centerLeft,
                 child: FractionallySizedBox(
                   widthFactor: ratio,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.teal,
-                      borderRadius: BorderRadius.circular(6),
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 '${(ratio * 100).toStringAsFixed(0)}% of daily goal (${formatDuration(goalMs)})',
-                style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
               ),
             ],
           );
@@ -58,20 +66,20 @@ class UsageBar extends StatelessWidget {
                     height: 10,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(6),
+                      color: track,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                       child: Row(
                         children: [
                           Expanded(
                             flex: goalMs,
-                            child: Container(color: Colors.teal),
+                            child: Container(color: scheme.primary),
                           ),
                           Expanded(
                             flex: overtimeMs,
-                            child: Container(color: Colors.orange.shade700),
+                            child: Container(color: palette.warning),
                           ),
                         ],
                       ),
@@ -84,33 +92,31 @@ class UsageBar extends StatelessWidget {
                     child: Container(
                       width: 2,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: scheme.onPrimary.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(1),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.sm),
               Wrap(
                 spacing: 6,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     '$percent% of daily goal',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange.shade800,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.warning,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                   Text(
                     '• ${formatDuration(overtimeMs)} over ${formatDuration(goalMs)} limit',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
                   ),
                 ],
               ),

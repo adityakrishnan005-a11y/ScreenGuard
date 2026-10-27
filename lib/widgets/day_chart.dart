@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:screenguard/theme/app_theme.dart';
 import 'package:screenguard/utils/format.dart';
 
 class DayChart extends StatelessWidget {
@@ -22,13 +23,20 @@ class DayChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (data.isEmpty) {
-      return const Center(
-          child: Text('No weekly data yet', style: TextStyle(color: Colors.grey)));
+      return Center(
+        child: Text(
+          'No weekly data yet',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      );
     }
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final palette = AppPalette.of(context);
     final primaryColor = theme.colorScheme.primary;
+    final selectedColor = palette.warning;
+    final manyBars = data.length > 10;
 
     final groups = <BarChartGroupData>[];
     double maxRawY = 1.0;
@@ -50,8 +58,8 @@ class DayChart extends StatelessWidget {
         barRods: [
           BarChartRodData(
             toY: hours,
-            width: isSelected ? 20 : 16,
-            color: isSelected ? Colors.amber[700] : primaryColor,
+            width: isSelected ? (manyBars ? 12 : 20) : (manyBars ? 7 : 16),
+            color: isSelected ? selectedColor : primaryColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
             backDrawRodData: BackgroundBarChartRodData(
               show: true,
@@ -125,6 +133,10 @@ class DayChart extends StatelessWidget {
               getTitlesWidget: (value, _) {
                 final idx = value.toInt();
                 if (idx < 0 || idx >= data.length) return const SizedBox.shrink();
+                final step = data.length > 20 ? 5 : (data.length > 10 ? 2 : 1);
+                if (step > 1 && idx % step != 0 && idx != data.length - 1) {
+                  return const SizedBox.shrink();
+                }
                 final item = data[idx];
                 final dt = item['date'] as DateTime? ?? DateTime.tryParse(item['d'] as String? ?? '');
                 final isSelected = _isSameDay(selectedDate, dt);
@@ -139,7 +151,7 @@ class DayChart extends StatelessWidget {
                       fontSize: 11,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                       color: isSelected
-                          ? Colors.amber[800]
+                          ? selectedColor
                           : (isDark ? Colors.grey[300] : Colors.grey[700]),
                     ),
                   ),

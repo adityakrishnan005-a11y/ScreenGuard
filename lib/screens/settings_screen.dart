@@ -9,14 +9,23 @@ import 'package:screenguard/services/sound_service.dart';
 import 'package:screenguard/services/theme_service.dart';
 import 'package:screenguard/services/update_checker.dart';
 import 'package:screenguard/screens/crash_reports_screen.dart';
+import 'package:screenguard/theme/app_theme.dart';
+import 'package:screenguard/ui/adaptive.dart';
+import 'package:screenguard/widgets/app_section.dart';
 
 class SettingsScreen extends StatefulWidget {
   final DatabaseService db;
   final int initialTabIndex;
+
+  /// When true the screen is rendered inside [MainShell] and must not provide
+  /// its own [Scaffold]/[AppBar] or a second navigation layer.
+  final bool embedded;
+
   const SettingsScreen({
     super.key,
     required this.db,
     this.initialTabIndex = 0,
+    this.embedded = false,
   });
 
   @override
@@ -170,71 +179,155 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  static const _sectionLabels = [
+    'General',
+    'Limits & Pomodoro',
+    'Diagnostics',
+    'Updates',
+    'Data',
+  ];
+
+  static const _sectionIcons = [
+    Icons.settings_rounded,
+    Icons.timer_rounded,
+    Icons.bug_report_rounded,
+    Icons.system_update_rounded,
+    Icons.storage_rounded,
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
-        elevation: 0,
+    final layout = AppLayout.of(context);
+    final wide = MediaQuery.sizeOf(context).width >= 1000;
+    final horiz = layout.isCompact ? AppSpacing.lg : AppSpacing.xxl;
+
+    final header = Padding(
+      padding: EdgeInsets.fromLTRB(horiz, AppSpacing.lg, horiz, 0),
+      child: const AppPageHeader(
+        title: 'Settings',
+        subtitle: 'Notifications, limits, updates and your data',
       ),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-            labelType: NavigationRailLabelType.all,
-            groupAlignment: -1.0,
-            minWidth: 88,
-            destinations: [
-              const NavigationRailDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: Text('General'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.timer_outlined),
-                selectedIcon: Icon(Icons.timer),
-                label: Text('Limits &\nPomodoro', textAlign: TextAlign.center),
-              ),
-              NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: _crashCount > 0,
-                  label: Text('$_crashCount'),
-                  child: const Icon(Icons.bug_report_outlined),
-                ),
-                selectedIcon: Badge(
-                  isLabelVisible: _crashCount > 0,
-                  label: Text('$_crashCount'),
-                  child: const Icon(Icons.bug_report),
-                ),
-                label: const Text('Diagnostics'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.system_update_outlined),
-                selectedIcon: Icon(Icons.system_update),
-                label: Text('Updates'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.storage_outlined),
-                selectedIcon: Icon(Icons.storage),
-                label: Text('Data'),
-              ),
+    );
+
+    final stack = IndexedStack(
+      index: _selectedIndex,
+      children: [
+        _buildGeneralTab(),
+        _buildLimitsTab(),
+        _buildDaemonTab(),
+        _buildUpdatesTab(),
+        _buildDataTab(),
+      ],
+    );
+
+    final body = wide
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildNavigationRail(),
+              const VerticalDivider(thickness: 1, width: 1),
+              Expanded(child: stack),
             ],
+          )
+        : Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(horiz, AppSpacing.sm, 0, 0),
+                child: _buildSectionChips(),
+              ),
+              Expanded(child: stack),
+            ],
+          );
+
+    if (widget.embedded) {
+      return Column(children: [header, Expanded(child: body)]);
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings'), elevation: 0),
+      body: body,
+    );
+  }
+
+  Widget _buildNavigationRail() {
+    return NavigationRail(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+      labelType: NavigationRailLabelType.all,
+      groupAlignment: -1.0,
+      minWidth: 88,
+      destinations: [
+        const NavigationRailDestination(
+          icon: Icon(Icons.settings_outlined),
+          selectedIcon: Icon(Icons.settings),
+          label: Text('General'),
+        ),
+        const NavigationRailDestination(
+          icon: Icon(Icons.timer_outlined),
+          selectedIcon: Icon(Icons.timer),
+          label: Text('Limits &\nPomodoro', textAlign: TextAlign.center),
+        ),
+        NavigationRailDestination(
+          icon: Badge(
+            isLabelVisible: _crashCount > 0,
+            label: Text('$_crashCount'),
+            child: const Icon(Icons.bug_report_outlined),
           ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: [
-                _buildGeneralTab(),
-                _buildLimitsTab(),
-                _buildDaemonTab(),
-                _buildUpdatesTab(),
-                _buildDataTab(),
-              ],
+          selectedIcon: Badge(
+            isLabelVisible: _crashCount > 0,
+            label: Text('$_crashCount'),
+            child: const Icon(Icons.bug_report),
+          ),
+          label: const Text('Diagnostics'),
+        ),
+        const NavigationRailDestination(
+          icon: Icon(Icons.system_update_outlined),
+          selectedIcon: Icon(Icons.system_update),
+          label: Text('Updates'),
+        ),
+        const NavigationRailDestination(
+          icon: Icon(Icons.storage_outlined),
+          selectedIcon: Icon(Icons.storage),
+          label: Text('Data'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionChips() {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < _sectionLabels.length; i++)
+            Padding(
+              padding: EdgeInsets.only(
+                right: i == _sectionLabels.length - 1 ? 0 : AppSpacing.sm,
+              ),
+              child: ChoiceChip(
+                selected: _selectedIndex == i,
+                onSelected: (_) => setState(() => _selectedIndex = i),
+                avatar: Icon(
+                  _sectionIcons[i],
+                  size: 18,
+                  color: _selectedIndex == i
+                      ? theme.colorScheme.onPrimaryContainer
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                label: i == 2 && _crashCount > 0
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_sectionLabels[i]),
+                          const SizedBox(width: AppSpacing.xs),
+                          Badge.count(count: _crashCount),
+                        ],
+                      )
+                    : Text(_sectionLabels[i]),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -318,7 +411,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.light_mode_rounded, size: 18, color: Colors.orange),
+                        Icon(Icons.light_mode_rounded, size: 18, color: Color(0xFFEF6C00)),
                         SizedBox(width: 8),
                         Text('Light'),
                       ],
@@ -415,46 +508,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          ...SoundService.presets.map((preset) {
-            return RadioListTile<String>(
-              title: Text(preset.label),
-              value: preset.id,
-              groupValue: _soundTheme,
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              onChanged: _soundEnabled
-                  ? (val) {
-                      if (val != null) {
-                        setState(() => _soundTheme = val);
-                        widget.db.setSoundTheme(val);
-                      }
-                    }
-                  : null,
-            );
-          }),
-          RadioListTile<String>(
-            title: const Text('Custom Audio File (.ogg, .wav, .mp3)'),
-            value: 'custom',
+          RadioGroup<String>(
             groupValue: _soundTheme,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            onChanged: _soundEnabled
-                ? (val) {
-                    if (val != null) {
-                      setState(() => _soundTheme = val);
-                      widget.db.setSoundTheme(val);
-                    }
-                  }
-                : null,
+            onChanged: (val) {
+              if (val == null || !_soundEnabled) return;
+              setState(() => _soundTheme = val);
+              widget.db.setSoundTheme(val);
+            },
+            child: Column(
+              children: [
+                for (final preset in SoundService.presets)
+                  RadioListTile<String>(
+                    title: Text(preset.label),
+                    value: preset.id,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    enabled: _soundEnabled,
+                  ),
+                RadioListTile<String>(
+                  title: const Text('Custom Audio File (.ogg, .wav, .mp3)'),
+                  value: 'custom',
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  enabled: _soundEnabled,
+                ),
+              ],
+            ),
           ),
           if (isCustom) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.15)),
+                border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
               ),
               child: Row(
                 children: [
@@ -770,7 +858,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     size: 20,
                     color: _notificationsEnabled
                         ? (notifyVal ? Theme.of(context).colorScheme.primary : Theme.of(context).disabledColor)
-                        : Theme.of(context).disabledColor.withOpacity(0.3),
+                        : Theme.of(context).disabledColor.withValues(alpha: 0.3),
                   ),
                 ),
               ),
@@ -788,7 +876,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     size: 20,
                     color: _soundEnabled
                         ? (soundVal ? Theme.of(context).colorScheme.primary : Theme.of(context).disabledColor)
-                        : Theme.of(context).disabledColor.withOpacity(0.3),
+                        : Theme.of(context).disabledColor.withValues(alpha: 0.3),
                   ),
                 ),
               ),
@@ -958,10 +1046,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.35),
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
               ),
             ),
             child: Row(
@@ -1090,8 +1178,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: enabled
-                      ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.4)
-                      : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4)
+                      : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -1193,6 +1281,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildDaemonTab() {
     final daemonService = Provider.of<DaemonService>(context);
+    final palette = AppPalette.of(context);
+    final statusColor = daemonService.isRunning ? palette.success : palette.danger;
+    final shieldColor = daemonService.isRunning
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.error;
 
     return Center(
       child: ConstrainedBox(
@@ -1210,15 +1303,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: (daemonService.isRunning ? Colors.teal : Colors.red)
-                            .withValues(alpha: 0.12),
+                        color: shieldColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
                         daemonService.isRunning
                             ? Icons.shield_rounded
                             : Icons.shield_outlined,
-                        color: daemonService.isRunning ? Colors.teal : Colors.red,
+                        color: shieldColor,
                         size: 32,
                       ),
                     ),
@@ -1241,15 +1333,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: (daemonService.isRunning
-                                          ? Colors.green
-                                          : Colors.red)
-                                      .withValues(alpha: 0.15),
+                                  color: statusColor.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: daemonService.isRunning
-                                        ? Colors.green
-                                        : Colors.red,
+                                    color: statusColor,
                                     width: 1,
                                   ),
                                 ),
@@ -1260,9 +1347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       width: 6,
                                       height: 6,
                                       decoration: BoxDecoration(
-                                        color: daemonService.isRunning
-                                            ? Colors.green
-                                            : Colors.red,
+                                        color: statusColor,
                                         shape: BoxShape.circle,
                                       ),
                                     ),
@@ -1274,9 +1359,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       style: TextStyle(
                                         fontSize: 10.5,
                                         fontWeight: FontWeight.bold,
-                                        color: daemonService.isRunning
-                                            ? Colors.green.shade800
-                                            : Colors.red.shade800,
+                                        color: statusColor,
                                       ),
                                     ),
                                   ],
@@ -1324,7 +1407,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       // Stop button
                       FilledButton.icon(
                         style: FilledButton.styleFrom(
-                          backgroundColor: Colors.red.shade700,
+                          backgroundColor: Theme.of(context).colorScheme.error,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -1349,7 +1432,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       // Start button
                       FilledButton.icon(
                         style: FilledButton.styleFrom(
-                          backgroundColor: Colors.teal,
+                          backgroundColor: Theme.of(context).colorScheme.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -1506,7 +1589,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                                 ? 'Diagnostic ping delivered to developer Sentry dashboard!'
                                                 : 'Failed to deliver ping. Check your internet connection.',
                                           ),
-                                          backgroundColor: ok ? Colors.teal : Colors.red,
+                                          backgroundColor: ok
+                                              ? Theme.of(context).colorScheme.primary
+                                              : Theme.of(context).colorScheme.error,
                                         ),
                                       );
                                     }
@@ -1526,7 +1611,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: (_crashCount > 0 ? Colors.red : Colors.green)
+                      color: (_crashCount > 0 ? palette.danger : palette.success)
                           .withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
@@ -1534,7 +1619,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _crashCount > 0
                           ? Icons.bug_report_outlined
                           : Icons.check_circle_outline,
-                      color: _crashCount > 0 ? Colors.red : Colors.green,
+                      color: _crashCount > 0 ? palette.danger : palette.success,
                       size: 20,
                     ),
                   ),
@@ -1597,6 +1682,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildUpdatesTab() {
     final hasUpdate = _updateChecker.hasUpdate;
+    final palette = AppPalette.of(context);
+    final goodColor = palette.success;
     final latestVersion = _updateChecker.lastKnownVersion;
     final currentVersion = _updateChecker.currentVersion;
     final lastCheck = _updateChecker.lastCheckTime;
@@ -1636,7 +1723,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: (hasUpdate ? Colors.green : Theme.of(context).colorScheme.primary)
+                        color: (hasUpdate ? goodColor : Theme.of(context).colorScheme.primary)
                             .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -1644,7 +1731,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         hasUpdate
                             ? Icons.system_update_alt_rounded
                             : Icons.check_circle_outline_rounded,
-                        color: hasUpdate ? Colors.green : Theme.of(context).colorScheme.primary,
+                        color: hasUpdate ? goodColor : Theme.of(context).colorScheme.primary,
                         size: 32,
                       ),
                     ),
@@ -1667,16 +1754,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.orange.withOpacity(0.15),
+                                    color: palette.warning.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.orange.shade300),
+                                    border: Border.all(color: palette.warning),
                                   ),
                                   child: Text(
                                     'BETA',
                                     style: TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.orange.shade800,
+                                      color: palette.warning,
                                     ),
                                   ),
                                 ),
@@ -1714,7 +1801,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.4),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -1864,11 +1951,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 );
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
+                                  SnackBar(
+                                    content: const Text(
                                       'Installation failed. Try downloading manually from GitHub.',
                                     ),
-                                    backgroundColor: Colors.red,
+                                    backgroundColor: Theme.of(context).colorScheme.error,
                                   ),
                                 );
                               }
@@ -1877,7 +1964,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: const Icon(Icons.download_rounded, size: 18),
                           label: Text('Install v$latestVersion'),
                           style: FilledButton.styleFrom(
-                            backgroundColor: Colors.green,
+                            backgroundColor: goodColor,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -2102,7 +2189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: error ? Colors.red : null,
+        backgroundColor: error ? Theme.of(context).colorScheme.error : null,
       ),
     );
   }
@@ -2150,7 +2237,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(action),
           ),
@@ -2243,6 +2331,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildDataTab() {
     final daemonService = Provider.of<DaemonService>(context);
+    final palette = AppPalette.of(context);
     final sortedDays = _dataDays.toList()..sort();
     return Center(
       child: ConstrainedBox(
@@ -2316,7 +2405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(width: 12),
                     FilledButton(
                       style: FilledButton.styleFrom(
-                          backgroundColor: Colors.orange),
+                          backgroundColor: palette.warning),
                       onPressed:
                           (_dataBusy || _dataRange == null) ? null : _deleteRange,
                       child: _dataBusy
@@ -2367,7 +2456,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     alignment: Alignment.centerRight,
                     child: FilledButton(
                       style: FilledButton.styleFrom(
-                          backgroundColor: Colors.orange),
+                          backgroundColor: palette.warning),
                       onPressed: _dataBusy ? null : _deleteDays,
                       child: Text(
                           'Delete ${sortedDays.length} day${sortedDays.length == 1 ? '' : 's'}'),
@@ -2386,12 +2475,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
+                      color: palette.danger.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.delete_forever_outlined,
-                      color: Colors.red,
+                      color: palette.danger,
                       size: 20,
                     ),
                   ),
@@ -2404,8 +2493,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: TextStyle(fontSize: 12),
                   ),
                   trailing: FilledButton(
-                    style:
-                        FilledButton.styleFrom(backgroundColor: Colors.red),
+                    style: FilledButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.error),
                     onPressed: (_dataBusy || _dataSessionCount == 0)
                         ? null
                         : _deleteAll,
@@ -2428,12 +2517,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _sectionCard({required List<Widget> children, EdgeInsetsGeometry? padding}) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       child: Padding(
-        padding: padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: padding ?? const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: children,
@@ -2443,14 +2529,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _sectionHeader(String text) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4, left: 4),
+      padding: const EdgeInsets.only(
+        top: AppSpacing.md,
+        bottom: AppSpacing.sm,
+        left: AppSpacing.xs,
+      ),
       child: Text(
         text,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: theme.colorScheme.onSurface,
+        ),
       ),
     );
   }

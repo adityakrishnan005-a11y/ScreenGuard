@@ -3,8 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:screenguard/services/app_icon.dart';
+import 'package:screenguard/theme/app_theme.dart';
 import 'package:screenguard/utils/format.dart';
 
+/// A single app usage row. It renders without its own card/border so callers
+/// can group several rows inside one rounded section card.
 class AppListTile extends StatelessWidget {
   final String name;
   final int ms;
@@ -18,21 +21,21 @@ class AppListTile extends StatelessWidget {
     required this.name,
     required this.ms,
     required this.maxMs,
-    this.color = Colors.teal,
+    this.color = AppTheme.seed,
     this.onTap,
     this.iconPath,
   });
 
   Widget _letterAvatar(Color color, String initial) {
     return CircleAvatar(
-      radius: 16,
-      backgroundColor: color.withValues(alpha: 0.18),
+      radius: 18,
+      backgroundColor: color.withValues(alpha: 0.16),
       child: Text(
         initial,
         style: TextStyle(
           color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
         ),
       ),
     );
@@ -44,73 +47,73 @@ class AppListTile extends StatelessWidget {
     final Widget image = AppIconService.isSvg(path)
         ? SvgPicture.file(
             File(path),
-            width: 32,
-            height: 32,
+            width: 36,
+            height: 36,
             fit: BoxFit.cover,
           )
         : Image.file(
             File(path),
-            width: 32,
-            height: 32,
+            width: 36,
+            height: 36,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => _letterAvatar(color, initial),
           );
     return SizedBox(
-      width: 32,
-      height: 32,
-      child: ClipOval(child: image),
+      width: 36,
+      height: 36,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: image,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final ratio = maxMs == 0 ? 0.0 : (ms / maxMs).clamp(0.0, 1.0);
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
-        ),
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        leading: _leading(color, initial),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                name,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                overflow: TextOverflow.ellipsis,
+      leading: _leading(color, initial),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              name,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
-            ),
-            Text(
-              formatDuration(ms),
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6.0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 6,
-              color: color,
-              backgroundColor: color.withValues(alpha: 0.12),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-        ),
-        onTap: onTap,
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            formatDuration(ms),
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+        ],
       ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.sm),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: LinearProgressIndicator(
+            value: ratio,
+            minHeight: 6,
+            color: color,
+            backgroundColor: color.withValues(alpha: 0.12),
+          ),
+        ),
+      ),
+      onTap: onTap,
     );
   }
 }

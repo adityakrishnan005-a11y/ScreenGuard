@@ -1,19 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-
-const List<Color> appPalette = [
-  Color(0xFF00B4D8), // Cyan / Teal
-  Color(0xFF7209B7), // Violet / Purple
-  Color(0xFF38B000), // Emerald Green
-  Color(0xFFFFA200), // Amber Gold
-  Color(0xFFF72585), // Coral Pink
-  Color(0xFF4CC9F0), // Sky Blue
-  Color(0xFF9E9E9E), // Slate / Grey
-];
-
-Color getAppColor(int index) {
-  return appPalette[index % appPalette.length];
-}
+import 'package:screenguard/theme/app_theme.dart';
 
 class AppPieChart extends StatefulWidget {
   final List<Map<String, dynamic>> perApp;
@@ -29,6 +16,7 @@ class _AppPieChartState extends State<AppPieChart> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final activeMs = widget.perApp.fold<int>(0, (sum, a) => sum + (a['t'] as int));
     final idleMs = widget.idleMs;
     final totalMs = activeMs + idleMs;
@@ -91,7 +79,7 @@ class _AppPieChartState extends State<AppPieChart> {
       final pct = (ms / totalMs * 100);
       final isTouched = i == _touchedIndex;
       final radius = isTouched ? 44.0 : 36.0;
-      final color = getAppColor(i);
+      final color = palette.colorAt(i);
 
       sections.add(PieChartSectionData(
         color: color,
@@ -109,7 +97,7 @@ class _AppPieChartState extends State<AppPieChart> {
     if (otherMs > 0) {
       final pct = (otherMs / totalMs * 100);
       final isTouched = displayApps.length == _touchedIndex;
-      final color = getAppColor(displayApps.length);
+      final color = palette.colorAt(displayApps.length);
       sections.add(PieChartSectionData(
         color: color,
         value: otherMs.toDouble(),
@@ -123,7 +111,7 @@ class _AppPieChartState extends State<AppPieChart> {
       ));
     }
 
-    const idleColor = Color(0xFF78909C); // Blue Grey / Slate
+    final idleColor = palette.idle;
     if (idleMs > 0) {
       final pct = (idleMs / totalMs * 100);
       final idleIndex = displayApps.length + (otherMs > 0 ? 1 : 0);
@@ -177,17 +165,17 @@ class _AppPieChartState extends State<AppPieChart> {
           children: [
             for (var i = 0; i < displayApps.length; i++)
               _LegendItem(
-                color: getAppColor(i),
+                color: palette.colorAt(i),
                 label: displayApps[i]['app_name'] as String? ??
                     displayApps[i]['app'] as String,
               ),
             if (otherMs > 0)
               _LegendItem(
-                color: getAppColor(displayApps.length),
+                color: palette.colorAt(displayApps.length),
                 label: 'Other',
               ),
             if (idleMs > 0)
-              const _LegendItem(
+              _LegendItem(
                 color: idleColor,
                 label: 'Idle / Away',
               ),

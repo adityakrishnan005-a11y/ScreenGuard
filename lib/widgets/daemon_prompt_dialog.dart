@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:screenguard/services/daemon_service.dart';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/theme/app_theme.dart';
 
 class DaemonPromptDialog extends StatelessWidget {
   final DaemonService daemonService;
@@ -40,9 +41,11 @@ class DaemonPromptDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final palette = AppPalette.of(context);
 
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       title: Row(
@@ -50,10 +53,10 @@ class DaemonPromptDialog extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.teal.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: scheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: const Icon(Icons.shield_outlined, color: Colors.teal, size: 28),
+            child: Icon(Icons.shield_outlined, color: scheme.primary, size: 28),
           ),
           const SizedBox(width: 14),
           const Expanded(
@@ -92,7 +95,7 @@ class DaemonPromptDialog extends StatelessWidget {
             // Option 1: Run Permanently (Autostart on Boot)
             _OptionTile(
               icon: Icons.all_inclusive_rounded,
-              iconColor: Colors.teal,
+              iconColor: scheme.primary,
               title: 'Run Permanently (Recommended)',
               subtitle: 'Starts automatically whenever your PC turns on and stays active in background.',
               isPrimary: true,
@@ -107,7 +110,7 @@ class DaemonPromptDialog extends StatelessWidget {
             // Option 2: Start for Now
             _OptionTile(
               icon: Icons.play_arrow_rounded,
-              iconColor: Colors.blue,
+              iconColor: palette.breakTime,
               title: 'Start for Now',
               subtitle: 'Runs in background until your PC shuts down. Won\'t auto-start next boot.',
               onTap: () async {
@@ -121,7 +124,7 @@ class DaemonPromptDialog extends StatelessWidget {
             // Option 3: Leave to start manually
             _OptionTile(
               icon: Icons.pause_circle_outline_rounded,
-              iconColor: Colors.orange,
+              iconColor: palette.warning,
               title: 'Leave to Start Manually',
               subtitle: 'Do not start right now. You can start it anytime from the top bar or Settings.',
               onTap: () {
@@ -155,18 +158,19 @@ class _OptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: isPrimary ? Colors.teal : Colors.grey.withValues(alpha: 0.2),
+            color: isPrimary ? scheme.primary : scheme.outlineVariant,
             width: isPrimary ? 1.5 : 1,
           ),
-          color: isPrimary ? Colors.teal.withValues(alpha: 0.06) : Colors.transparent,
+          color: isPrimary ? scheme.primary.withValues(alpha: 0.06) : Colors.transparent,
         ),
         child: Row(
           children: [
@@ -188,7 +192,7 @@ class _OptionTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: isPrimary ? Colors.teal.shade800 : null,
+                      color: isPrimary ? scheme.primary : null,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -196,7 +200,7 @@ class _OptionTile extends StatelessWidget {
                     subtitle,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade600,
+                      color: scheme.onSurfaceVariant,
                       height: 1.3,
                     ),
                   ),
@@ -207,7 +211,7 @@ class _OptionTile extends StatelessWidget {
             Icon(
               Icons.chevron_right_rounded,
               size: 20,
-              color: Colors.grey.shade400,
+              color: scheme.onSurfaceVariant,
             ),
           ],
         ),

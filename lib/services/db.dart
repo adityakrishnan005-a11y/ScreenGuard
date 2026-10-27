@@ -536,6 +536,75 @@ class DatabaseService {
     return rows.first['t'] as int;
   }
 
+  /// Total active screen time between two local dates, inclusive.
+  int totalForRange(DateTime from, DateTime to) {
+    final start = DateTime(from.year, from.month, from.day).millisecondsSinceEpoch;
+    final end = DateTime(to.year, to.month, to.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final effectiveEnd = end < nowMs ? end : nowMs;
+    final rows = db.select(
+      "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ?;",
+      [effectiveEnd, start, effectiveEnd],
+    );
+    return rows.first['t'] as int;
+  }
+
+  /// Daily active totals for the last [days] days, oldest first.
+  List<Map<String, dynamic>> dailyTotals({int days = 7}) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startDay = today.subtract(Duration(days: days - 1));
+    final nowMs = now.millisecondsSinceEpoch;
+    final result = <Map<String, dynamic>>[];
+
+    for (var i = 0; i < days; i++) {
+      final day = startDay.add(Duration(days: i));
+      final dayStart = day.millisecondsSinceEpoch;
+      final dayEnd = DateTime(day.year, day.month, day.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+      final effectiveEnd = dayEnd < nowMs ? dayEnd : nowMs;
+
+      final rows = db.select(
+        "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ?;",
+        [effectiveEnd, dayStart, dayEnd],
+      );
+      final dateStr =
+          '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+      result.add({'d': dateStr, 't': rows.first['t'] as int, 'date': day});
+    }
+    return result;
+  }
+
+  /// Per-app totals between two local dates, inclusive.
+  List<Map<String, dynamic>> perAppForRange(
+    DateTime from,
+    DateTime to, {
+    int limit = 10,
+  }) {
+    final start = DateTime(from.year, from.month, from.day).millisecondsSinceEpoch;
+    final end = DateTime(to.year, to.month, to.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final effectiveEnd = end < nowMs ? end : nowMs;
+
+    return db
+        .select(
+          "SELECT app, app_name, SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ? GROUP BY app ORDER BY t DESC LIMIT ?;",
+          [effectiveEnd, start, effectiveEnd, limit],
+        )
+        .cast<Map<String, dynamic>>();
+  }
+
+  /// Number of fully completed focus sessions between two local dates.
+  int completedFocusSessionsInRange(DateTime from, DateTime to) {
+    final start = DateTime(from.year, from.month, from.day).millisecondsSinceEpoch;
+    final end = DateTime(to.year, to.month, to.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+    final rows = db.select(
+      'SELECT COUNT(*) AS t FROM focus_sessions WHERE completed = 1 AND started_at >= ? AND started_at <= ?;',
+      [start, end],
+    );
+    return rows.first['t'] as int;
+  }
+
+
   int getDailyGoalMs() {
     final rows = db.select('SELECT value FROM settings WHERE key = ?;', ['daily_goal_ms']);
     if (rows.isEmpty || rows.first['value'] == null) {
@@ -770,12 +839,12 @@ class DatabaseService {
       'DELETE FROM sessions WHERE started_at >= ? AND started_at < ?;',
       [startMs, endMs],
     );
-    final sessions = db.getUpdatedRows();
+    final sessions = db.updatedRows;
     db.execute(
       'DELETE FROM focus_sessions WHERE started_at >= ? AND started_at < ?;',
       [startMs, endMs],
     );
-    return sessions + db.getUpdatedRows();
+    return sessions + db.updatedRows;
   }
 
   /// Delete usage history from [from] (inclusive) to [to] (inclusive day).
@@ -802,9 +871,9 @@ class DatabaseService {
   /// Limits, block-list and settings are kept.
   int clearAllUsageData() {
     db.execute('DELETE FROM sessions;');
-    var n = db.getUpdatedRows();
+    var n = db.updatedRows;
     db.execute('DELETE FROM focus_sessions;');
-    n += db.getUpdatedRows();
+    n += db.updatedRows;
     try {
       db.execute('DELETE FROM active_focus_state;');
     } catch (_) {}

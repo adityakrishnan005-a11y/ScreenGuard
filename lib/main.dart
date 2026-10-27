@@ -6,6 +6,7 @@ import 'package:screenguard/services/app_resolver.dart';
 import 'package:screenguard/services/crash_reporter.dart';
 import 'package:screenguard/services/daemon_service.dart';
 import 'package:screenguard/services/theme_service.dart';
+import 'package:screenguard/theme/app_theme.dart';
 import 'package:screenguard/screens/main_shell.dart';
 import 'package:screenguard/screens/times_up_screen.dart';
 import 'package:screenguard/screens/focus_block_screen.dart';
@@ -111,20 +112,8 @@ class MyApp extends StatelessWidget {
       title: 'ScreenGuard',
       debugShowCheckedModeBanner: false,
       themeMode: themeService.themeMode,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
-          brightness: Brightness.light,
-        ),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
-          brightness: Brightness.dark,
-        ),
-      ),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       home: homeWidget,
     );
   }

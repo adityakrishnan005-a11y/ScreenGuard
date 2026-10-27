@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:screenguard/services/db.dart';
 import 'package:screenguard/services/feedback_service.dart';
+import 'package:screenguard/theme/app_theme.dart';
 
 /// One-time dialog that shows a feedback request published by the
 /// maintainer.
@@ -76,7 +77,7 @@ class FeedbackDialog extends StatelessWidget {
     final actions = FeedbackService.actionsOf(prompt);
 
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       title: Row(
@@ -84,12 +85,12 @@ class FeedbackDialog extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.teal.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.chat_bubble_outline_rounded,
-              color: Colors.teal,
+              color: theme.colorScheme.primary,
               size: 28,
             ),
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/db.dart';
+import 'package:screenguard/theme/app_theme.dart';
 import 'package:screenguard/utils/format.dart';
 
 class AppLimitDialog extends StatefulWidget {
@@ -50,6 +51,8 @@ class _AppLimitDialogState extends State<AppLimitDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final palette = AppPalette.of(context);
     final presets = [
       {'label': '15m', 'ms': 15 * 60 * 1000},
       {'label': '30m', 'ms': 30 * 60 * 1000},
@@ -61,7 +64,7 @@ class _AppLimitDialogState extends State<AppLimitDialog> {
     return AlertDialog(
       title: Row(
         children: [
-          const Icon(Icons.timer_outlined, color: Colors.teal),
+          Icon(Icons.timer_outlined, color: scheme.primary),
           const SizedBox(width: 8),
           Expanded(child: Text('Daily Limit: ${widget.appName}')),
         ],
@@ -71,9 +74,9 @@ class _AppLimitDialogState extends State<AppLimitDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Set a daily screen time limit for this app. ScreenGuard will notify you and minimize the app when time expires.',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
             const Text('Presets:', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -121,8 +124,8 @@ class _AppLimitDialogState extends State<AppLimitDialog> {
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 Text(
                   formatDuration(_selectedMs),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16, color: Colors.teal),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16, color: scheme.primary),
                 ),
               ],
             ),
@@ -132,7 +135,7 @@ class _AppLimitDialogState extends State<AppLimitDialog> {
       actions: [
         if (widget.currentLimitMs > 0)
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: palette.danger),
             onPressed: () {
               final db = Provider.of<DatabaseService>(context, listen: false);
               db.deleteAppLimit(widget.app);
@@ -144,7 +147,7 @@ class _AppLimitDialogState extends State<AppLimitDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: () {
             final db = Provider.of<DatabaseService>(context, listen: false);
             db.setAppLimit(widget.app, _selectedMs);

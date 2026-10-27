@@ -8,6 +8,10 @@ import 'package:screenguard/services/notification_service.dart';
 import 'package:screenguard/services/app_resolver.dart';
 import 'package:screenguard/services/app_icon.dart';
 import 'package:screenguard/screens/settings_screen.dart';
+import 'package:screenguard/theme/app_theme.dart';
+import 'package:screenguard/ui/adaptive.dart';
+import 'package:screenguard/widgets/app_section.dart';
+import 'package:screenguard/widgets/screen_time_ring.dart';
 import 'package:screenguard/utils/format.dart';
 
 class FocusScreen extends StatefulWidget {
@@ -168,7 +172,6 @@ class _FocusScreenState extends State<FocusScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('🎉 All Focus Sessions Complete! Great work!'),
-          backgroundColor: Colors.teal,
         ),
       );
     }
@@ -229,11 +232,11 @@ class _FocusScreenState extends State<FocusScreen> {
     final result = await showDialog<int>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.timer_outlined, color: Colors.teal),
-            SizedBox(width: 8),
-            Text('Custom Focus Duration'),
+            Icon(Icons.timer_outlined, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: AppSpacing.md),
+            const Text('Custom Focus Duration'),
           ],
         ),
         content: Column(
@@ -241,7 +244,7 @@ class _FocusScreenState extends State<FocusScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Enter duration in minutes:'),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               controller: controller,
               keyboardType: TextInputType.number,
@@ -249,13 +252,12 @@ class _FocusScreenState extends State<FocusScreen> {
               decoration: const InputDecoration(
                 labelText: 'Minutes',
                 suffixText: 'mins',
-                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xl),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: [5, 10, 20, 30, 50, 90, 120].map((m) {
                 return ActionChip(
                   label: Text('$m min'),
@@ -272,7 +274,7 @@ class _FocusScreenState extends State<FocusScreen> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () {
               final val = int.tryParse(controller.text.trim());
               if (val != null && val > 0 && val <= 720) {
@@ -298,8 +300,31 @@ class _FocusScreenState extends State<FocusScreen> {
     return '$m:$s';
   }
 
+  void _openSettings() {
+    final scope = MainShellScope.maybeOf(context);
+    if (scope != null) {
+      scope.goToTab(3);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SettingsScreen(db: context.read<DatabaseService>()),
+      ),
+    );
+  }
+
+  String _ringCaption() {
+    if (!_isActive) return 'FOCUS MODE TIMER';
+    if (_isPaused) return _isBreak ? 'BREAK PAUSED' : 'SESSION PAUSED';
+    return _isBreak ? 'BREAK TIME' : 'SESSION IN PROGRESS';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final palette = AppPalette.of(context);
+
     final db = Provider.of<DatabaseService>(context);
     final completedCount = db.getCompletedFocusSessionsToday();
     // During break, the arc should fill over break duration; during focus, over focus duration
@@ -310,6 +335,14 @@ class _FocusScreenState extends State<FocusScreen> {
         ? (1.0 - (_remainingSeconds / totalDurationSec)).clamp(0.0, 1.0)
         : 0.0;
 
+    // Ring accent follows the session phase: blue for breaks, amber while
+    // paused, and the brand primary for an idle or running focus session.
+    final ringColor = _isPaused
+        ? palette.warning
+        : _isBreak
+            ? palette.breakTime
+            : scheme.primary;
+
     final presets = [15, 25, 45, 60];
 
     final filteredApps = _allApps.where((item) {
@@ -317,438 +350,376 @@ class _FocusScreenState extends State<FocusScreen> {
       return name.contains(_searchQuery.toLowerCase());
     }).toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('ScreenGuard — Digital Wellbeing for Linux', style: TextStyle(fontWeight: FontWeight.bold)),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Notifications & Sounds',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => SettingsScreen(db: context.read<DatabaseService>()),
-                ),
+    return AppScrollView(
+      children: [
+        AppPageHeader(
+          title: 'Focus',
+          subtitle: 'Block distracting apps and protect deep work',
+          actions: [
+            IconButton(
+              tooltip: 'Settings',
+              onPressed: _openSettings,
+              icon: const Icon(Icons.settings_outlined),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 1000;
+
+            final timerCard = _buildTimerCard(
+              context,
+              palette: palette,
+              scheme: scheme,
+              completedCount: completedCount,
+              progress: progress,
+              ringColor: ringColor,
+              presets: presets,
+            );
+            final appsCard = _buildAppsCard(
+              context,
+              db: db,
+              palette: palette,
+              filteredApps: filteredApps,
+            );
+
+            if (wide) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 5, child: timerCard),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(flex: 4, child: appsCard),
+                ],
               );
-            },
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                timerCard,
+                const SizedBox(height: AppSpacing.lg),
+                appsCard,
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimerCard(
+    BuildContext context, {
+    required AppPalette palette,
+    required ColorScheme scheme,
+    required int completedCount,
+    required double progress,
+    required Color ringColor,
+    required List<int> presets,
+  }) {
+    final theme = Theme.of(context);
+    final wide = AppLayout.of(context).size.width >= 1000;
+
+    final pomodoroChip = Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: palette.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.workspace_premium_rounded, size: 16, color: palette.warning),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            '$completedCount Pomodoro${completedCount == 1 ? '' : 's'} Today',
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurface,
+            ),
           ),
-          const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1150),
+    );
+
+    return AppSectionCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppSectionHeader(
+            title: 'Focus mode',
+            subtitle: 'Block distracting apps & stay in deep flow',
+            trailing: pomodoroChip,
+            padding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+
+          // ── Countdown ring ────────────────────────────────────────────
+          Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Hero Section: Pomodoro Timer + Stats
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Card(
-                      elevation: 0.5,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Focus Mode 🎯',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Block distracting apps & stay in deep flow',
-                                      style: TextStyle(color: Colors.grey, fontSize: 13),
-                                    ),
-                                  ],
-                                ),
-                                Chip(
-                                  avatar: const Icon(Icons.workspace_premium_rounded,
-                                      size: 16, color: Colors.amber),
-                                  label: Text(
-                                      '$completedCount Pomodoro${completedCount == 1 ? '' : 's'} Today'),
-                                  backgroundColor: Colors.amber.withValues(alpha: 0.12),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 28),
-
-                            // Circular Animated Timer
-                            SizedBox(
-                              width: 200,
-                              height: 200,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 200,
-                                    height: 200,
-                                    child: CircularProgressIndicator(
-                                      value: _isActive ? progress : 0.0,
-                                      strokeWidth: 10,
-                                      color: _isPaused
-                                          ? Colors.amber.shade700
-                                          : _isBreak
-                                              ? Colors.blue.shade400
-                                              : Colors.teal,
-                                      backgroundColor: (_isPaused
-                                              ? Colors.amber
-                                              : _isBreak
-                                                  ? Colors.blue
-                                                  : Colors.teal)
-                                          .withValues(alpha: 0.12),
-                                    ),
-                                  ),
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // Break icon when in break mode
-                                      if (_isActive && _isBreak && !_isPaused) ...[
-                                        Icon(Icons.coffee_outlined,
-                                            size: 22, color: Colors.blue.shade400),
-                                        const SizedBox(height: 4),
-                                      ],
-                                      Text(
-                                        _formatTimerText(_remainingSeconds),
-                                        style: const TextStyle(
-                                          fontSize: 42,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: -1,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _isActive
-                                            ? (_isPaused
-                                                ? (_isBreak ? 'BREAK PAUSED' : 'SESSION PAUSED')
-                                                : _isBreak
-                                                    ? 'BREAK TIME'
-                                                    : 'SESSION IN PROGRESS')
-                                            : 'FOCUS MODE TIMER',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: _isPaused
-                                              ? Colors.amber.shade800
-                                              : _isBreak
-                                                  ? Colors.blue.shade700
-                                                  : Colors.teal.shade700,
-                                          letterSpacing: 1,
-                                        ),
-                                      ),
-                                      // Cycle counter
-                                      if (_isActive && _totalCycles > 1) ...[
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          'CYCLE $_currentCycle / $_totalCycles',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            color: _isBreak
-                                                ? Colors.blue.shade400
-                                                : Colors.teal.shade400,
-                                            letterSpacing: 0.8,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 28),
-
-                            // Presets Selector & Custom Option (Disabled when active)
-                            if (!_isActive) ...[
-                              Wrap(
-                                spacing: 10,
-                                runSpacing: 8,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  ...presets.map((mins) {
-                                    final isSelected = _selectedDurationMinutes == mins;
-                                    return ChoiceChip(
-                                      label: Text('$mins min'),
-                                      selected: isSelected,
-                                      onSelected: (_) {
-                                        setState(() {
-                                          _selectedDurationMinutes = mins;
-                                          _remainingSeconds = mins * 60;
-                                        });
-                                      },
-                                    );
-                                  }),
-                                  ChoiceChip(
-                                    avatar: const Icon(Icons.tune_rounded, size: 16),
-                                    label: Text(!presets.contains(_selectedDurationMinutes)
-                                        ? '$_selectedDurationMinutes min (Custom)'
-                                        : 'Custom'),
-                                    selected: !presets.contains(_selectedDurationMinutes),
-                                    onSelected: (_) => _showCustomDurationDialog(),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-
-                            // Action Buttons
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (!_isActive)
-                                  ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 32, vertical: 14),
-                                      backgroundColor: Colors.teal,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    onPressed: _startSession,
-                                    icon: const Icon(Icons.play_arrow_rounded,
-                                        size: 24),
-                                    label: const Text(
-                                      'Start Focus Session',
-                                      style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  )
-                                else ...[
-                                  if (!_isPaused)
-                                    FilledButton.tonalIcon(
-                                      style: FilledButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 20, vertical: 14),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      onPressed: _pauseSession,
-                                      icon: const Icon(Icons.pause_rounded, size: 22),
-                                      label: Text(
-                                        _isBreak ? 'Pause Break' : 'Pause Session',
-                                        style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                    )
-                                  else
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 20, vertical: 14),
-                                        backgroundColor: _isBreak ? Colors.blue.shade700 : Colors.teal,
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      onPressed: _resumeSession,
-                                      icon: const Icon(Icons.play_arrow_rounded, size: 22),
-                                      label: Text(
-                                        _isBreak ? 'Resume Break' : 'Resume Session',
-                                        style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  const SizedBox(width: 12),
-                                  OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 20, vertical: 14),
-                                      foregroundColor: Colors.red,
-                                      side: const BorderSide(color: Colors.red),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    onPressed: _cancelSession,
-                                    icon: const Icon(Icons.stop_rounded, size: 22),
-                                    label: const Text(
-                                      'Cancel Session',
-                                      style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 24),
-
-                // Distracting Apps Checklist
-                Card(
-                  elevation: 0.5,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                ScreenTimeRing(
+                  progress: _isActive ? progress : 0.0,
+                  value: _formatTimerText(_remainingSeconds),
+                  caption: _ringCaption(),
+                  color: ringColor,
+                  size: wide ? 220 : 190,
+                  strokeWidth: wide ? 16 : 14,
+                  icon: _isActive && _isBreak && !_isPaused
+                      ? Icons.coffee_outlined
+                      : null,
+                  valueStyle: theme.textTheme.displaySmall?.copyWith(
+                    fontSize: 44,
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.block_rounded, color: Colors.redAccent),
-                            SizedBox(width: 10),
-                            Text(
-                              'Distracting Apps to Block',
-                              style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Select apps that should be paused/minimized automatically during a Focus Session.',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Search Input Field
-                        TextField(
-                          controller: _searchController,
-                          decoration: const InputDecoration(
-                            hintText: 'Search installed apps...',
-                            prefixIcon: Icon(Icons.search),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(10)),
-                            ),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          onChanged: (val) => setState(() => _searchQuery = val),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Layout switch: list rows (with usage time) or
-                        // GNOME-style icon grid.
-                        Row(
-                          children: [
-                            const Spacer(),
-                            const Text('Grid layout',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600)),
-                            const SizedBox(width: 6),
-                            Switch(
-                              value: db.isFocusAppGridLayout(),
-                              activeColor: Colors.teal,
-                              onChanged: (val) =>
-                                  setState(() => db.setFocusAppGridLayout(val)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-
-                        if (filteredApps.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text('No matching apps found.',
-                                style: TextStyle(color: Colors.grey)),
-                          )
-                        else if (db.isFocusAppGridLayout())
-                          // Grid layout: GNOME app-grid style — icon above
-                          // the name, selection shown by a checkbox badge.
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 110,
-                              mainAxisSpacing: 10,
-                              crossAxisSpacing: 6,
-                              childAspectRatio: 0.92,
-                            ),
-                            itemCount: filteredApps.length,
-                            itemBuilder: (context, index) {
-                              final item = filteredApps[index];
-                              return _AppGridTile(
-                                app: item['app'] as String,
-                                name: item['app_name'] as String? ??
-                                    item['app'] as String,
-                                selected: _distractingApps
-                                    .contains(item['app'] as String),
-                                onTap: () {
-                                  db.toggleDistractingApp(item['app'] as String);
-                                  _loadState();
-                                },
-                              );
-                            },
-                          )
-                        else
-                          ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: filteredApps.length,
-                            itemBuilder: (context, index) {
-                              final item = filteredApps[index];
-                              final app = item['app'] as String;
-                              final name =
-                                  item['app_name'] as String? ?? app;
-                              final totalMs = item['t'] as int? ?? 0;
-                              final isBlocked = _distractingApps.contains(app);
-
-                              return CheckboxListTile(
-                                value: isBlocked,
-                                activeColor: Colors.redAccent,
-                                title: Text(
-                                  name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600, fontSize: 14),
-                                ),
-                                subtitle: Text(
-                                  totalMs > 0 ? 'Total tracked: ${formatDuration(totalMs)}' : 'Not yet tracked',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                onChanged: (_) {
-                                  db.toggleDistractingApp(app);
-                                  _loadState();
-                                },
-                              );
-                            },
-                          ),
-                      ],
+                ),
+                // Cycle counter
+                if (_isActive && _totalCycles > 1) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: ringColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Text(
+                      'CYCLE $_currentCycle / $_totalCycles',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
+
+          // ── Presets (only while nothing is running) ───────────────────
+          if (!_isActive) ...[
+            const SizedBox(height: AppSpacing.xl),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              alignment: WrapAlignment.center,
+              children: [
+                ...presets.map((mins) {
+                  final isSelected = _selectedDurationMinutes == mins;
+                  return ChoiceChip(
+                    label: Text('$mins min'),
+                    selected: isSelected,
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedDurationMinutes = mins;
+                        _remainingSeconds = mins * 60;
+                      });
+                    },
+                  );
+                }),
+                ChoiceChip(
+                  avatar: const Icon(Icons.tune_rounded, size: 16),
+                  label: Text(!presets.contains(_selectedDurationMinutes)
+                      ? '$_selectedDurationMinutes min (Custom)'
+                      : 'Custom'),
+                  selected: !presets.contains(_selectedDurationMinutes),
+                  onSelected: (_) => _showCustomDurationDialog(),
+                ),
+              ],
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.xl),
+
+          // ── Action buttons ────────────────────────────────────────────
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (!_isActive)
+                FilledButton.icon(
+                  onPressed: _startSession,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Start Focus Session'),
+                )
+              else ...[
+                if (!_isPaused)
+                  FilledButton.tonalIcon(
+                    onPressed: _pauseSession,
+                    icon: const Icon(Icons.pause_rounded),
+                    label: Text(_isBreak ? 'Pause Break' : 'Pause Session'),
+                  )
+                else
+                  FilledButton.icon(
+                    onPressed: _resumeSession,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: Text(_isBreak ? 'Resume Break' : 'Resume Session'),
+                  ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: palette.danger,
+                    side: BorderSide(color: palette.danger.withValues(alpha: 0.55)),
+                  ),
+                  onPressed: _cancelSession,
+                  icon: const Icon(Icons.stop_rounded),
+                  label: const Text('Cancel Session'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppsCard(
+    BuildContext context, {
+    required DatabaseService db,
+    required AppPalette palette,
+    required List<Map<String, dynamic>> filteredApps,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final layoutToggle = SegmentedButton<bool>(
+      showSelectedIcon: false,
+      selected: {db.isFocusAppGridLayout()},
+      onSelectionChanged: (selection) =>
+          setState(() => db.setFocusAppGridLayout(selection.first)),
+      segments: const [
+        ButtonSegment(
+          value: false,
+          icon: Icon(Icons.subject_rounded, size: 18),
+          label: Text('List'),
         ),
+        ButtonSegment(
+          value: true,
+          icon: Icon(Icons.grid_view_rounded, size: 18),
+          label: Text('Grid'),
+        ),
+      ],
+    );
+
+    return AppSectionCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppSectionHeader(
+            title: 'Distracting apps to block',
+            subtitle:
+                'Select apps that should be paused/minimized automatically during a Focus Session.',
+            trailing: layoutToggle,
+            padding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+
+          // Search Input Field
+          TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              hintText: 'Search installed apps...',
+              prefixIcon: Icon(Icons.search_rounded),
+            ),
+            onChanged: (val) => setState(() => _searchQuery = val),
+          ),
+
+          const SizedBox(height: AppSpacing.lg),
+
+          if (filteredApps.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Text(
+                'No matching apps found.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else if (db.isFocusAppGridLayout())
+            // Grid layout: GNOME app-grid style — icon above
+            // the name, selection shown by a checkbox badge.
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate:
+                  const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 110,
+                mainAxisSpacing: AppSpacing.md,
+                crossAxisSpacing: AppSpacing.md,
+                childAspectRatio: 0.92,
+              ),
+              itemCount: filteredApps.length,
+              itemBuilder: (context, index) {
+                final item = filteredApps[index];
+                return _AppGridTile(
+                  app: item['app'] as String,
+                  name: item['app_name'] as String? ??
+                      item['app'] as String,
+                  selected: _distractingApps
+                      .contains(item['app'] as String),
+                  onTap: () {
+                    db.toggleDistractingApp(item['app'] as String);
+                    _loadState();
+                  },
+                );
+              },
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: filteredApps.length,
+              itemBuilder: (context, index) {
+                final item = filteredApps[index];
+                final app = item['app'] as String;
+                final name =
+                    item['app_name'] as String? ?? app;
+                final totalMs = item['t'] as int? ?? 0;
+                final isBlocked = _distractingApps.contains(app);
+
+                return CheckboxListTile(
+                  value: isBlocked,
+                  checkboxShape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  title: Text(
+                    name,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    totalMs > 0
+                        ? 'Total tracked: ${formatDuration(totalMs)}'
+                        : 'Not yet tracked',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  onChanged: (_) {
+                    db.toggleDistractingApp(app);
+                    _loadState();
+                  },
+                );
+              },
+            ),
+        ],
       ),
     );
   }
 }
 
 /// One tile in the grid app picker: themed icon over the app name, GNOME
-/// app-grid style. Selection is a red check badge in the icon's corner.
+/// app-grid style. Selection is a danger check badge in the icon's corner.
 class _AppGridTile extends StatelessWidget {
   final String app;
   final String name;
@@ -762,88 +733,95 @@ class _AppGridTile extends StatelessWidget {
     required this.onTap,
   });
 
-  Widget _icon() {
+  Widget _icon(BuildContext context, AppPalette palette) {
+    final scheme = Theme.of(context).colorScheme;
     final path = AppIconService.resolve(app);
-    final Widget image;
-    if (path == null) {
-      image = Center(
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : '?',
-          style: const TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            color: Colors.teal,
-          ),
-        ),
-      );
-    } else if (AppIconService.isSvg(path)) {
-      image = SvgPicture.file(File(path), fit: BoxFit.contain);
-    } else {
-      image = Image.file(File(path), fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Center(
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.teal,
-                  ),
-                ),
-              ));
-    }
+    final image = _appImage(context, path);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: Colors.teal.withValues(alpha: selected ? 0.16 : 0.08),
-        borderRadius: BorderRadius.circular(14),
+        color: selected
+            ? palette.danger.withValues(alpha: 0.14)
+            : scheme.secondaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       child: image,
+    );
+  }
+
+  Widget _appImage(BuildContext context, String? path) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget letter() => Center(
+          child: Text(
+            name.isNotEmpty ? name[0].toUpperCase() : '?',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: scheme.primary,
+            ),
+          ),
+        );
+    if (path == null) {
+      return letter();
+    }
+    if (AppIconService.isSvg(path)) {
+      return SvgPicture.file(File(path), fit: BoxFit.contain);
+    }
+    return Image.file(
+      File(path),
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => letter(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.sm),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Stack(
               clipBehavior: Clip.none,
               children: [
-                _icon(),
+                _icon(context, palette),
                 if (selected)
                   Positioned(
                     top: -4,
                     right: -4,
                     child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
+                      padding: const EdgeInsets.all(AppSpacing.xxs),
+                      decoration: BoxDecoration(
+                        color: palette.danger,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.check,
-                          size: 12, color: Colors.white),
+                      child: Icon(
+                        Icons.check,
+                        size: 12,
+                        color: theme.colorScheme.onPrimary,
+                      ),
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
+              style: theme.textTheme.labelSmall?.copyWith(
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? Colors.redAccent : null,
+                color: selected ? palette.danger : theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],

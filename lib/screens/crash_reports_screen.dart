@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/crash_reporter.dart';
+import 'package:screenguard/theme/app_theme.dart';
 
 /// Screen that lists all stored crash logs and lets the user view details
 /// or report them as GitHub issues.
@@ -31,6 +32,7 @@ class _CrashReportsScreenState extends State<CrashReportsScreen> {
   Widget build(BuildContext context) {
     final reporter = Provider.of<CrashReporter>(context, listen: false);
     final colorScheme = Theme.of(context).colorScheme;
+    final palette = AppPalette.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -57,7 +59,7 @@ class _CrashReportsScreenState extends State<CrashReportsScreen> {
                       FilledButton(
                         onPressed: () => Navigator.pop(ctx, true),
                         style: FilledButton.styleFrom(
-                          backgroundColor: Colors.red.shade700,
+                          backgroundColor: colorScheme.error,
                         ),
                         child: const Text('Clear All'),
                       ),
@@ -80,7 +82,7 @@ class _CrashReportsScreenState extends State<CrashReportsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.check_circle_outline,
-                      size: 64, color: Colors.green.shade400),
+                      size: 64, color: palette.success),
                   const SizedBox(height: 16),
                   Text(
                     'No crash reports',
@@ -128,7 +130,7 @@ class _CrashReportsScreenState extends State<CrashReportsScreen> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.bug_report, color: Colors.red.shade400, size: 22),
+            Icon(Icons.bug_report, color: Theme.of(context).colorScheme.error, size: 22),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -161,7 +163,7 @@ class _CrashReportsScreenState extends State<CrashReportsScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Theme.of(ctx).colorScheme.errorContainer.withOpacity(0.3),
+                    color: Theme.of(ctx).colorScheme.errorContainer.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: SelectableText(
@@ -179,7 +181,7 @@ class _CrashReportsScreenState extends State<CrashReportsScreen> {
                     constraints: const BoxConstraints(maxHeight: 250),
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withOpacity(0.4),
+                      color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: SingleChildScrollView(
@@ -222,10 +224,10 @@ class _CrashReportsScreenState extends State<CrashReportsScreen> {
             width: 80,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
-                color: Colors.grey,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -264,13 +266,13 @@ class _CrashLogCard extends StatelessWidget {
     Color iconColor;
     if (type == 'unclean_shutdown') {
       icon = Icons.power_off_outlined;
-      iconColor = Colors.orange;
+      iconColor = AppPalette.of(context).warning;
     } else if (source == 'watchdog') {
       icon = Icons.restart_alt;
-      iconColor = Colors.red;
+      iconColor = AppPalette.of(context).danger;
     } else {
       icon = Icons.bug_report_outlined;
-      iconColor = Colors.red.shade400;
+      iconColor = AppPalette.of(context).danger;
     }
 
     // Format timestamp nicely
@@ -293,8 +295,8 @@ class _CrashLogCard extends StatelessWidget {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: colorScheme.outline.withOpacity(0.1)),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        side: BorderSide(color: colorScheme.outlineVariant),
       ),
       child: InkWell(
         onTap: onTap,
@@ -307,7 +309,7 @@ class _CrashLogCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
+                  color: iconColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, size: 20, color: iconColor),
@@ -323,7 +325,7 @@ class _CrashLogCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer.withOpacity(0.5),
+                            color: colorScheme.primaryContainer.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -371,7 +373,7 @@ class _CrashLogCard extends StatelessWidget {
                   ),
                   IconButton(
                     icon: Icon(Icons.delete_outline,
-                        size: 18, color: Colors.red.shade300),
+                        size: 18, color: AppPalette.of(context).danger),
                     tooltip: 'Delete',
                     onPressed: onDelete,
                     constraints: const BoxConstraints(
