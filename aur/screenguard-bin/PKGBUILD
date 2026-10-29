@@ -1,43 +1,79 @@
 # Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
 pkgname=screenguard-bin
-pkgver=0.1.0
-pkgrel=1
+pkgver=0.1.1
+pkgrel=2
 pkgdesc="ScreenGuard — Digital Wellbeing for Linux (Screen time tracking, daily app limits & focus mode)"
 arch=('x86_64')
 url="https://github.com/adityakrishnan005-a11y/ScreenGuard"
 license=('GPL-3.0-only')
-depends=('xdotool' 'xorg-xprop' 'gtk3' 'sqlite')
-options=(!debug)
+depends=('xdotool' 'xorg-xprop' 'gtk3' 'sqlite' 'xprintidle')
+options=(!debug !strip)
 optdepends=(
-  'xprintidle: idle-time detection on X11 (required for KDE/X11 sessions)'
   'gnome-shell: GNOME Shell extension support (primary Wayland backend)'
   'python: active window helper script'
+  'python-pyatspi: accessibility bus support for window tracking'
 )
 provides=('screenguard')
 conflicts=('screenguard' 'screenguard-git')
-source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/screenguard-$pkgver-x86_64.tar.gz")
-sha256sums=('b388c96086ace8dd23650c1498bd379560ba6f1628fa63f8c65a512606b3a770')
+source=(
+  "$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/screenguard-$pkgver-x86_64.tar.gz"
+  "screenguard.service::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/linux/screenguard.service"
+  "50-screenguard.preset::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/linux/50-screenguard.preset"
+  "screenguard.desktop::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/linux/screenguard.desktop"
+  "screenguard-autostart.desktop::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/linux/screenguard-autostart.desktop"
+  "icon.png::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/linux/resources/icon.png"
+  "active_window_helper.py::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/bin/active_window_helper.py"
+  "enable_fedora_a11y.sh::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/tools/enable_fedora_a11y.sh"
+  "migrate.sh::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/tools/migrate.sh"
+  "metadata.json::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/extension/metadata.json"
+  "extension.js::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/extension/extension.js"
+)
+sha256sums=(
+  '535995bbd66771b87e504e4d93b1f0cc655462e1c7e4011f62ccbc07e2cd2793'
+  '3c4e9707079f6fd369436376aa94d59874f516f069f1f3f7c3054afe3c374ea3'
+  'a521de5318b9413a57e52b24d0c43456a9509eb140454d28e2e143f9efafd654'
+  'eef09f0c07aa64c2b143a9b417bdd51665c8a382ba6d0599b65b4901ea795135'
+  'abfbcaa026c4ddb9a3afcd664c7da26bcfabd216959922f3a0bd1be9d31be6d0'
+  'd865be21e90d039d0ee05b246ff07bc708000ed659f5895acb2721a829293098'
+  '4c9c89af603dbf3fd9f7f2f729d5ba34fe5f32fb77fd2dcd08bad606aa11eb88'
+  'df04e5369ac029e9754a9bc591f340efbff30a203581cd51e5fccec0341ae3e2'
+  '87c8781dd3af27cd59bf63fd98787d3c2553c2266d7d130d703a80561202ef3a'
+  '65cb77e23a8177dcc00f03ddddeed101e7840039e940c01bdd6ff87d1e8b55a3'
+  '837a7c59b24597d2a1e0df89406e785cd1318d0f1395adcb2e2c26f2a1c4f034'
+)
 
 package() {
-  cd "$srcdir/screenguard"
+  cd "$srcdir"
 
+  # Core application bundle -> /opt/screenguard
   install -d "$pkgdir/opt/screenguard"
   cp -a screenguard screenguard-daemon data lib "$pkgdir/opt/screenguard/"
+  for helper in screenguard-watchdog screenguard-notify screenguard-killer; do
+    [ -f "$srcdir/$helper" ] && install -Dm755 "$srcdir/$helper" "$pkgdir/opt/screenguard/$helper"
+  done
 
-  install -Dm644 linux/resources/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/screenguard.png"
+  # App icon
+  install -Dm644 "$srcdir/icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/screenguard.png"
 
+  # Executable symlinks in PATH
   install -d "$pkgdir/usr/bin"
-  ln -s /opt/screenguard/screenguard "$pkgdir/usr/bin/screenguard"
-  ln -s /opt/screenguard/screenguard-daemon "$pkgdir/usr/bin/screenguard-daemon"
+  for bin in screenguard screenguard-daemon screenguard-watchdog screenguard-notify screenguard-killer; do
+    [ -e "$pkgdir/opt/screenguard/$bin" ] && ln -s "/opt/screenguard/$bin" "$pkgdir/usr/bin/$bin"
+  done
 
-  install -Dm644 linux/screenguard.service "$pkgdir/usr/lib/systemd/user/screenguard.service"
-  install -Dm644 linux/screenguard.desktop "$pkgdir/usr/share/applications/screenguard.desktop"
-  install -Dm644 linux/screenguard-autostart.desktop "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"
+  # systemd user service, preset, desktop launcher, and autostart
+  install -Dm644 "$srcdir/screenguard.service" "$pkgdir/usr/lib/systemd/user/screenguard.service"
+  install -Dm644 "$srcdir/50-screenguard.preset" "$pkgdir/usr/lib/systemd/user-preset/50-screenguard.preset"
+  install -Dm644 "$srcdir/screenguard.desktop" "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm644 "$srcdir/screenguard-autostart.desktop" "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"
 
-  install -Dm755 bin/active_window_helper.py "$pkgdir/usr/share/screenguard/active_window_helper.py"
-  install -Dm755 tools/enable_fedora_a11y.sh "$pkgdir/usr/share/screenguard/enable_fedora_a11y.sh"
+  # Helper scripts
+  install -Dm755 "$srcdir/active_window_helper.py" "$pkgdir/usr/share/screenguard/active_window_helper.py"
+  install -Dm755 "$srcdir/enable_fedora_a11y.sh" "$pkgdir/usr/share/screenguard/enable_fedora_a11y.sh"
+  install -Dm755 "$srcdir/migrate.sh" "$pkgdir/usr/share/screenguard/migrate.sh"
 
+  # GNOME Shell extension
   install -d "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app"
-  install -Dm644 extension/metadata.json "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json"
-  install -Dm755 extension/extension.js "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/extension.js"
+  install -Dm644 "$srcdir/metadata.json" "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/metadata.json"
+  install -Dm755 "$srcdir/extension.js" "$pkgdir/usr/share/gnome-shell/extensions/screenguard@screenguard.app/extension.js"
 }

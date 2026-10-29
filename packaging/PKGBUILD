@@ -15,7 +15,7 @@ optdepends=(
 provides=('screenguard')
 conflicts=('screenguard-git')
 source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/$pkgname-$pkgver-x86_64.tar.gz")
-sha256sums=('2bb0e380e835a57417e605c09fe37e0589fd676ca2a80318137e07b8acac6e6c')
+sha256sums=('535995bbd66771b87e504e4d93b1f0cc655462e1c7e4011f62ccbc07e2cd2793')
 
 package() {
   # The release tarball has no top-level directory; it contains the app bundle
