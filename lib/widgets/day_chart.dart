@@ -34,8 +34,10 @@ class DayChart extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final palette = AppPalette.of(context);
-    final primaryColor = theme.colorScheme.primary;
-    final selectedColor = palette.warning;
+    final barColor = palette.chartBar;
+    final selectedColor = isDark
+        ? Color.lerp(barColor, Colors.white, 0.3)!
+        : Color.lerp(barColor, Colors.black, 0.2)!;
     final manyBars = data.length > 10;
 
     final groups = <BarChartGroupData>[];
@@ -58,14 +60,9 @@ class DayChart extends StatelessWidget {
         barRods: [
           BarChartRodData(
             toY: hours,
-            width: isSelected ? (manyBars ? 12 : 20) : (manyBars ? 7 : 16),
-            color: isSelected ? selectedColor : primaryColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-            backDrawRodData: BackgroundBarChartRodData(
-              show: true,
-              toY: maxY,
-              color: primaryColor.withValues(alpha: 0.08),
-            ),
+            width: isSelected ? (manyBars ? 11 : 24) : (manyBars ? 8 : 18),
+            color: isSelected ? selectedColor : barColor,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
           )
         ],
       ));

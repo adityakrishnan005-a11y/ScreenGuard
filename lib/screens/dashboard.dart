@@ -15,7 +15,6 @@ import 'package:screenguard/widgets/daily_goal_dialog.dart';
 import 'package:screenguard/widgets/screen_time_ring.dart';
 import 'package:screenguard/utils/format.dart';
 import 'package:screenguard/screens/app_detail.dart';
-import 'package:screenguard/screens/settings_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -107,19 +106,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  void _openSettings() {
-    final scope = MainShellScope.maybeOf(context);
-    if (scope != null) {
-      scope.goToTab(3);
-      return;
-    }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => SettingsScreen(db: context.read<DatabaseService>()),
-      ),
-    );
-  }
-
   Color _goalColor(BuildContext context) {
     final palette = AppPalette.of(context);
     if (_goal <= 0) return Theme.of(context).colorScheme.primary;
@@ -147,11 +133,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onPressed: _showSetGoalDialog,
               icon: const Icon(Icons.flag_outlined, size: 18),
               label: Text(_goal > 0 ? 'Edit daily goal' : 'Set daily goal'),
-            ),
-            IconButton(
-              tooltip: 'Settings',
-              onPressed: _openSettings,
-              icon: const Icon(Icons.settings_outlined),
             ),
           ],
         ),

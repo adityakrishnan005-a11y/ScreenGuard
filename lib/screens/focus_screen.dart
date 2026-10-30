@@ -7,7 +7,6 @@ import 'package:screenguard/services/db.dart';
 import 'package:screenguard/services/notification_service.dart';
 import 'package:screenguard/services/app_resolver.dart';
 import 'package:screenguard/services/app_icon.dart';
-import 'package:screenguard/screens/settings_screen.dart';
 import 'package:screenguard/theme/app_theme.dart';
 import 'package:screenguard/ui/adaptive.dart';
 import 'package:screenguard/widgets/app_section.dart';
@@ -300,19 +299,6 @@ class _FocusScreenState extends State<FocusScreen> {
     return '$m:$s';
   }
 
-  void _openSettings() {
-    final scope = MainShellScope.maybeOf(context);
-    if (scope != null) {
-      scope.goToTab(3);
-      return;
-    }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => SettingsScreen(db: context.read<DatabaseService>()),
-      ),
-    );
-  }
-
   String _ringCaption() {
     if (!_isActive) return 'FOCUS MODE TIMER';
     if (_isPaused) return _isBreak ? 'BREAK PAUSED' : 'SESSION PAUSED';
@@ -352,16 +338,9 @@ class _FocusScreenState extends State<FocusScreen> {
 
     return AppScrollView(
       children: [
-        AppPageHeader(
+        const AppPageHeader(
           title: 'Focus',
           subtitle: 'Block distracting apps and protect deep work',
-          actions: [
-            IconButton(
-              tooltip: 'Settings',
-              onPressed: _openSettings,
-              icon: const Icon(Icons.settings_outlined),
-            ),
-          ],
         ),
         const SizedBox(height: AppSpacing.xl),
         LayoutBuilder(

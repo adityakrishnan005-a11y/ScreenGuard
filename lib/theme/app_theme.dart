@@ -28,6 +28,7 @@ abstract final class AppRadius {
 class AppPalette extends ThemeExtension<AppPalette> {
   const AppPalette({
     required this.chartColors,
+    required this.chartBar,
     required this.idle,
     required this.success,
     required this.warning,
@@ -36,6 +37,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
   });
 
   final List<Color> chartColors;
+
+  /// Primary colour for the daily bar chart. Kept separate from the teal
+  /// accent so bars stay vivid and easy to read at a glance.
+  final Color chartBar;
   final Color idle;
   final Color success;
   final Color warning;
@@ -44,15 +49,15 @@ class AppPalette extends ThemeExtension<AppPalette> {
 
   static const AppPalette _fallback = AppPalette(
     chartColors: [
-      Color(0xFF26A69A),
-      Color(0xFF5C6BC0),
-      Color(0xFF66BB6A),
-      Color(0xFFFFB74D),
-      Color(0xFFEF5350),
-      Color(0xFF42A5F5),
-      Color(0xFF8D6E63),
+      Color(0xFF00B4D8),
+      Color(0xFF7209B7),
+      Color(0xFF38B000),
+      Color(0xFFFFA200),
+      Color(0xFFF72585),
+      Color(0xFF4CC9F0),
       Color(0xFF78909C),
     ],
+    chartBar: Color(0xFF2979FF),
     idle: Color(0xFF78909C),
     success: Color(0xFF2E7D32),
     warning: Color(0xFFEF6C00),
@@ -64,15 +69,15 @@ class AppPalette extends ThemeExtension<AppPalette> {
 
   static const AppPalette dark = AppPalette(
     chartColors: [
-      Color(0xFF4DB6AC),
-      Color(0xFF9FA8DA),
-      Color(0xFF81C784),
-      Color(0xFFFFCC80),
-      Color(0xFFEF9A9A),
-      Color(0xFF90CAF9),
-      Color(0xFFBCAAA4),
-      Color(0xFF90A4AE),
+      Color(0xFF22D3EE),
+      Color(0xFFA78BFA),
+      Color(0xFF4ADE80),
+      Color(0xFFFBBF24),
+      Color(0xFFFB7185),
+      Color(0xFF60A5FA),
+      Color(0xFF94A3B8),
     ],
+    chartBar: Color(0xFF5B9DFF),
     idle: Color(0xFF90A4AE),
     success: Color(0xFF81C784),
     warning: Color(0xFFFFB74D),
@@ -92,6 +97,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
   @override
   AppPalette copyWith({
     List<Color>? chartColors,
+    Color? chartBar,
     Color? idle,
     Color? success,
     Color? warning,
@@ -100,6 +106,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
   }) {
     return AppPalette(
       chartColors: chartColors ?? this.chartColors,
+      chartBar: chartBar ?? this.chartBar,
       idle: idle ?? this.idle,
       success: success ?? this.success,
       warning: warning ?? this.warning,
@@ -119,6 +126,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
               chartColors[i],
       ],
       idle: Color.lerp(idle, other.idle, t) ?? idle,
+      chartBar: Color.lerp(chartBar, other.chartBar, t) ?? chartBar,
       success: Color.lerp(success, other.success, t) ?? success,
       warning: Color.lerp(warning, other.warning, t) ?? warning,
       danger: Color.lerp(danger, other.danger, t) ?? danger,
