@@ -94,10 +94,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   int get _daysWithinGoal {
     if (_goal <= 0) return 0;
-    return _daily.where((d) {
-      final value = (d['t'] as int?) ?? 0;
-      return value > 0 && value <= _goal;
-    }).length;
+    // Days with no computer use count as within the daily goal too.
+    return _daily
+        .where((d) => ((d['t'] as int?) ?? 0) <= _goal)
+        .length;
   }
 
   String _shortDate(DateTime? date) {
@@ -381,6 +381,13 @@ class _GoalAdherenceCard extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   '$daysWithinGoal of $totalDays days under ${formatDuration(goalMs)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'Days with no computer use count as within goal.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
