@@ -23,6 +23,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  final GlobalKey<FocusScreenState> _focusKey = GlobalKey<FocusScreenState>();
   late final List<Widget> _pages;
 
   static const _destinations = <_AppDestination>[
@@ -54,7 +55,7 @@ class _MainShellState extends State<MainShell> {
     final db = Provider.of<DatabaseService>(context, listen: false);
     _pages = [
       const DashboardScreen(),
-      const FocusScreen(),
+      FocusScreen(key: _focusKey),
       const ReportsScreen(),
       SettingsScreen(db: db, embedded: true),
     ];
@@ -92,6 +93,9 @@ class _MainShellState extends State<MainShell> {
   void _goToTab(int index) {
     if (index < 0 || index >= _pages.length || index == _currentIndex) return;
     setState(() => _currentIndex = index);
+    if (index == 1) {
+      _focusKey.currentState?.refresh();
+    }
   }
 
   @override

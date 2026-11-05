@@ -85,6 +85,26 @@ class DatabaseService {
       );
     ''');
     db.execute('''
+      CREATE TABLE IF NOT EXISTS focus_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        icon TEXT NOT NULL DEFAULT 'center_focus_strong',
+        duration_minutes INTEGER NOT NULL DEFAULT 25,
+        custom_duration_minutes INTEGER NOT NULL DEFAULT 25,
+        total_cycles INTEGER NOT NULL DEFAULT 1,
+        break_minutes INTEGER NOT NULL DEFAULT 5,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_default INTEGER NOT NULL DEFAULT 0
+      );
+    ''');
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS focus_profile_apps (
+        profile_id INTEGER NOT NULL,
+        app TEXT NOT NULL,
+        PRIMARY KEY (profile_id, app)
+      );
+    ''');
+    db.execute('''
       CREATE TABLE IF NOT EXISTS focus_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         started_at INTEGER NOT NULL,
@@ -120,9 +140,13 @@ class DatabaseService {
     try {
       db.execute('ALTER TABLE active_focus_state ADD COLUMN break_duration_minutes INTEGER DEFAULT 5;');
     } catch (_) {}
+    try {
+      db.execute('ALTER TABLE active_focus_state ADD COLUMN profile_id INTEGER;');
+    } catch (_) {}
     db.execute(
         'CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);');
     db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_app ON sessions(app);');
+    _migrateFocusProfiles();
     _migrateCorruptedAppNames();
     _purgeDesktopShellSessions();
   }
@@ -311,18 +335,189 @@ class DatabaseService {
     return false;
   }
 
-  void startFocusSession(int durationMinutes, {int? totalCycles, int? breakMinutes}) {
+  // ── Focus profiles ─────────────────────────────────────────────────────────
+
+  /// Creates the two default focus profiles on first run and moves the legacy
+  /// global blocklist into the first profile so nothing is lost.
+  void _migrateFocusProfiles() {
+    final count =
+        db.select('SELECT COUNT(*) AS n FROM focus_profiles').first['n'] as int;
+    if (count > 0) {
+      if (getActiveFocusProfileId() == null) {
+        final first =
+            db.select('SELECT id FROM focus_profiles ORDER BY sort_order, id LIMIT 1');
+        if (first.isNotEmpty) {
+          setActiveFocusProfile(first.first['id'] as int);
+        }
+      }
+      return;
+    }
+
+    final cycles = getPomodoroCyclesCount().clamp(1, 20);
+    final breakMins = getPomodoroBreakMinutes().clamp(1, 60);
+
+    db.execute(
+      'INSERT INTO focus_profiles (name, icon, duration_minutes, custom_duration_minutes, total_cycles, break_minutes, sort_order, is_default) '
+      'VALUES (?, ?, 25, 25, ?, ?, 0, 1);',
+      ['Me time', 'spa', cycles, breakMins],
+    );
+    final meId = db.lastInsertRowId;
+    db.execute(
+      'INSERT INTO focus_profiles (name, icon, duration_minutes, custom_duration_minutes, total_cycles, break_minutes, sort_order, is_default) '
+      'VALUES (?, ?, 25, 25, ?, ?, 1, 1);',
+      ['Work time', 'work', cycles, breakMins],
+    );
+
+    // Preserve the old single blocklist as the first profile's list.
+    db.execute(
+      'INSERT OR IGNORE INTO focus_profile_apps (profile_id, app) SELECT ?, app FROM distracting_apps;',
+      [meId],
+    );
+    setActiveFocusProfile(meId);
+  }
+
+  List<Map<String, dynamic>> getFocusProfiles() {
+    return db
+        .select('SELECT * FROM focus_profiles ORDER BY sort_order ASC, id ASC')
+        .cast<Map<String, dynamic>>();
+  }
+
+  Map<String, dynamic>? getFocusProfile(int id) {
+    final rows = db.select('SELECT * FROM focus_profiles WHERE id = ?', [id]);
+    return rows.isEmpty ? null : rows.first.cast<String, dynamic>();
+  }
+
+  int addFocusProfile(String name, {String icon = 'center_focus_strong'}) {
+    final next = db
+        .select('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM focus_profiles')
+        .first['n'] as int;
+    db.execute(
+      'INSERT INTO focus_profiles (name, icon, duration_minutes, custom_duration_minutes, total_cycles, break_minutes, sort_order, is_default) '
+      'VALUES (?, ?, 25, 25, ?, ?, ?, 0);',
+      [
+        name.trim().isEmpty ? 'Focus mode' : name.trim(),
+        icon,
+        getPomodoroCyclesCount(),
+        getPomodoroBreakMinutes(),
+        next,
+      ],
+    );
+    return db.lastInsertRowId;
+  }
+
+  void updateFocusProfile(
+    int id, {
+    String? name,
+    String? icon,
+    int? durationMinutes,
+    int? customDurationMinutes,
+    int? totalCycles,
+    int? breakMinutes,
+  }) {
+    final current = getFocusProfile(id);
+    if (current == null) return;
+    final trimmed = name?.trim();
+    db.execute(
+      'UPDATE focus_profiles SET name = ?, icon = ?, duration_minutes = ?, custom_duration_minutes = ?, total_cycles = ?, break_minutes = ? WHERE id = ?;',
+      [
+        (trimmed != null && trimmed.isNotEmpty) ? trimmed : current['name'],
+        icon ?? current['icon'],
+        durationMinutes ?? current['duration_minutes'],
+        customDurationMinutes ?? current['custom_duration_minutes'],
+        (totalCycles ?? current['total_cycles'] as int).clamp(1, 20),
+        (breakMinutes ?? current['break_minutes'] as int).clamp(1, 60),
+        id,
+      ],
+    );
+  }
+
+  void deleteFocusProfile(int id) {
+    final profile = getFocusProfile(id);
+    if (profile == null || (profile['is_default'] as int? ?? 0) == 1) return;
+    db.execute('DELETE FROM focus_profile_apps WHERE profile_id = ?;', [id]);
+    db.execute('DELETE FROM focus_profiles WHERE id = ?;', [id]);
+    if (getActiveFocusProfileId() == id) {
+      final first =
+          db.select('SELECT id FROM focus_profiles ORDER BY sort_order, id LIMIT 1');
+      if (first.isNotEmpty) {
+        setActiveFocusProfile(first.first['id'] as int);
+      }
+    }
+  }
+
+  Set<String> getFocusProfileApps(int profileId) {
+    final rows = db.select(
+      'SELECT app FROM focus_profile_apps WHERE profile_id = ?;',
+      [profileId],
+    );
+    return rows.map((r) => r['app'] as String).toSet();
+  }
+
+  void toggleFocusProfileApp(int profileId, String app) {
+    final exists = db.select(
+      'SELECT app FROM focus_profile_apps WHERE profile_id = ? AND app = ?;',
+      [profileId, app],
+    );
+    if (exists.isNotEmpty) {
+      db.execute(
+        'DELETE FROM focus_profile_apps WHERE profile_id = ? AND app = ?;',
+        [profileId, app],
+      );
+    } else {
+      db.execute(
+        'INSERT INTO focus_profile_apps (profile_id, app) VALUES (?, ?);',
+        [profileId, app],
+      );
+    }
+  }
+
+  /// Copies a profile's blocklist into the runtime table the tracker reads.
+  void syncDistractingAppsForProfile(int profileId) {
+    final apps = getFocusProfileApps(profileId);
+    db.execute('DELETE FROM distracting_apps;');
+    for (final app in apps) {
+      db.execute('INSERT OR IGNORE INTO distracting_apps (app) VALUES (?);', [app]);
+    }
+  }
+
+  int? getActiveFocusProfileId() {
+    final raw = getSetting('active_focus_profile_id', defaultValue: '');
+    final id = int.tryParse(raw);
+    if (id == null || getFocusProfile(id) == null) return null;
+    return id;
+  }
+
+  void setActiveFocusProfile(int id) {
+    setSetting('active_focus_profile_id', id.toString());
+  }
+
+  void startFocusSession(
+    int durationMinutes, {
+    int? totalCycles,
+    int? breakMinutes,
+    int? profileId,
+  }) {
+    final profile = profileId != null ? getFocusProfile(profileId) : null;
     final now = DateTime.now().millisecondsSinceEpoch;
     final endTime = now + (durationMinutes * 60 * 1000);
     final remainingSec = durationMinutes * 60;
-    final cycles = totalCycles ?? (isPomodoroLoopEnabled() ? getPomodoroCyclesCount() : 1);
-    final brkMins = breakMinutes ?? getPomodoroBreakMinutes();
+    final cycles = totalCycles ??
+        (isPomodoroLoopEnabled()
+            ? (profile?['total_cycles'] as int? ?? getPomodoroCyclesCount())
+            : 1);
+    final brkMins = breakMinutes ??
+        (profile?['break_minutes'] as int? ?? getPomodoroBreakMinutes());
+
+    if (profileId != null) {
+      syncDistractingAppsForProfile(profileId);
+      setActiveFocusProfile(profileId);
+    }
 
     db.execute(
-      'INSERT INTO active_focus_state (id, end_time_ms, duration_minutes, is_paused, remaining_seconds, current_cycle, total_cycles, is_break, break_duration_minutes) VALUES (1, ?, ?, 0, ?, 1, ?, 0, ?) ON CONFLICT(id) DO UPDATE SET end_time_ms = ?, duration_minutes = ?, is_paused = 0, remaining_seconds = ?, current_cycle = 1, total_cycles = ?, is_break = 0, break_duration_minutes = ?;',
+      'INSERT INTO active_focus_state (id, end_time_ms, duration_minutes, is_paused, remaining_seconds, current_cycle, total_cycles, is_break, break_duration_minutes, profile_id) VALUES (1, ?, ?, 0, ?, 1, ?, 0, ?, ?) ON CONFLICT(id) DO UPDATE SET end_time_ms = ?, duration_minutes = ?, is_paused = 0, remaining_seconds = ?, current_cycle = 1, total_cycles = ?, is_break = 0, break_duration_minutes = ?, profile_id = ?;',
       [
-        endTime, durationMinutes, remainingSec, cycles, brkMins,
-        endTime, durationMinutes, remainingSec, cycles, brkMins
+        endTime, durationMinutes, remainingSec, cycles, brkMins, profileId,
+        endTime, durationMinutes, remainingSec, cycles, brkMins, profileId
       ],
     );
     db.execute(

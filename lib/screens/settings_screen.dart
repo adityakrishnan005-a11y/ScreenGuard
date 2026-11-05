@@ -63,8 +63,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Tab 2: Daily Limits & Pomodoro ─────────────────────────────────────────
   late bool _pomodoroLoopEnabled;
-  late int _pomodoroCycles;
-  late int _pomodoroBreakMinutes;
   late bool _focusStrictAutoclose;
 
   // ── Tab 4: Updates & Crash Reports ─────────────────────────────────────
@@ -121,8 +119,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // Tab 2: Limits & Pomodoro
     _pomodoroLoopEnabled = widget.db.isPomodoroLoopEnabled();
-    _pomodoroCycles = widget.db.getPomodoroCyclesCount();
-    _pomodoroBreakMinutes = widget.db.getPomodoroBreakMinutes();
     _focusStrictAutoclose = widget.db.isFocusStrictAutoclose();
 
     // Tab 4: Updates & Crash Reports
@@ -959,118 +955,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
           contentPadding: EdgeInsets.zero,
         ),
-        const Divider(height: 24),
-        // ── Number of cycles ─────────────────────────────────────────────────
-        AnimatedOpacity(
-          duration: const Duration(milliseconds: 200),
-          opacity: enabled ? 1.0 : 0.4,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
             children: [
-              _buildStepperRow(
-                icon: Icons.repeat_one_outlined,
-                title: 'Number of Focus Cycles',
-                subtitle: 'How many focus sessions to run before stopping',
-                value: _pomodoroCycles,
-                min: 1,
-                max: 20,
-                unit: _pomodoroCycles == 1 ? 'cycle' : 'cycles',
-                enabled: enabled,
-                onDecrement: () {
-                  if (_pomodoroCycles > 1) {
-                    setState(() => _pomodoroCycles--);
-                    widget.db.setPomodoroCyclesCount(_pomodoroCycles);
-                  }
-                },
-                onIncrement: () {
-                  if (_pomodoroCycles < 20) {
-                    setState(() => _pomodoroCycles++);
-                    widget.db.setPomodoroCyclesCount(_pomodoroCycles);
-                  }
-                },
-                onEdit: enabled ? () => _showNumberInputDialog(
-                  title: 'Number of Focus Cycles',
-                  currentValue: _pomodoroCycles,
-                  minValue: 1,
-                  maxValue: 20,
-                  unit: 'cycles',
-                  onConfirm: (val) {
-                    setState(() => _pomodoroCycles = val);
-                    widget.db.setPomodoroCyclesCount(val);
-                  },
-                ) : null,
+              Icon(
+                Icons.tune_outlined,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              const SizedBox(height: 16),
-              // ── Break duration ─────────────────────────────────────────────
-              _buildStepperRow(
-                icon: Icons.coffee_outlined,
-                title: 'Break Duration Between Sessions',
-                subtitle: 'Rest time between each focus cycle',
-                value: _pomodoroBreakMinutes,
-                min: 1,
-                max: 60,
-                unit: _pomodoroBreakMinutes == 1 ? 'minute' : 'minutes',
-                enabled: enabled,
-                onDecrement: () {
-                  if (_pomodoroBreakMinutes > 1) {
-                    setState(() => _pomodoroBreakMinutes--);
-                    widget.db.setPomodoroBreakMinutes(_pomodoroBreakMinutes);
-                  }
-                },
-                onIncrement: () {
-                  if (_pomodoroBreakMinutes < 60) {
-                    setState(() => _pomodoroBreakMinutes++);
-                    widget.db.setPomodoroBreakMinutes(_pomodoroBreakMinutes);
-                  }
-                },
-                onEdit: enabled ? () => _showNumberInputDialog(
-                  title: 'Break Duration',
-                  currentValue: _pomodoroBreakMinutes,
-                  minValue: 1,
-                  maxValue: 60,
-                  unit: 'minutes',
-                  onConfirm: (val) {
-                    setState(() => _pomodoroBreakMinutes = val);
-                    widget.db.setPomodoroBreakMinutes(val);
-                  },
-                ) : null,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  enabled
+                      ? 'Focus cycles and break length are set per mode on the Focus tab.'
+                      : 'Turn this on to let each focus mode repeat its cycles. Set them on the Focus tab.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
               ),
             ],
           ),
         ),
-        // ── Info banner ───────────────────────────────────────────────────────
-        if (enabled) ...[
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 18, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'When you start a session, it will repeat $_pomodoroCycles '
-                    '${_pomodoroCycles == 1 ? "time" : "times"} with a '
-                    '$_pomodoroBreakMinutes-minute break between each cycle.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -1131,151 +1046,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildStepperRow({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required int value,
-    required int min,
-    required int max,
-    required String unit,
-    required bool enabled,
-    required VoidCallback onDecrement,
-    required VoidCallback onIncrement,
-    VoidCallback? onEdit,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Icon(icon, size: 22, color: enabled ? Theme.of(context).colorScheme.primary : Theme.of(context).disabledColor),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              const SizedBox(height: 2),
-              Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Decrement
-            _stepBtn(
-              icon: Icons.remove,
-              enabled: enabled && value > min,
-              onTap: onDecrement,
-            ),
-            const SizedBox(width: 4),
-            // Value display — tap to type
-            InkWell(
-              onTap: onEdit,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: enabled
-                      ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4)
-                      : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$value $unit',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: enabled
-                        ? Theme.of(context).colorScheme.onPrimaryContainer
-                        : Theme.of(context).disabledColor,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            // Increment
-            _stepBtn(
-              icon: Icons.add,
-              enabled: enabled && value < max,
-              onTap: onIncrement,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _stepBtn({required IconData icon, required bool enabled, required VoidCallback onTap}) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: enabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(
-            icon,
-            size: 18,
-            color: enabled ? Theme.of(context).colorScheme.primary : Theme.of(context).disabledColor,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showNumberInputDialog({
-    required String title,
-    required int currentValue,
-    required int minValue,
-    required int maxValue,
-    required String unit,
-    required ValueChanged<int> onConfirm,
-  }) async {
-    final controller = TextEditingController(text: '$currentValue');
-    final formKey = GlobalKey<FormState>();
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Value ($minValue – $maxValue $unit)',
-              border: const OutlineInputBorder(),
-            ),
-            autofocus: true,
-            validator: (v) {
-              final n = int.tryParse(v ?? '');
-              if (n == null) return 'Enter a number';
-              if (n < minValue || n > maxValue) return 'Must be between $minValue and $maxValue';
-              return null;
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                onConfirm(int.parse(controller.text.trim()));
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Apply'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
   // TAB 3: Diagnostics (Daemon + Crash Reports)
   // ────────────────────────────────────────────────────────────────────────────
 
