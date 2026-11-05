@@ -1,23 +1,23 @@
 Architectures: amd64
 Codename: apt
 Components: main
-Date: Sun, 25 Oct 2026 06:38:17 +0000
+Date: Thu, 05 Nov 2026 19:03:51 +0000
 Label: ScreenGuard APT Repository
 Origin: ScreenGuard
 Suite: apt
 MD5Sum:
- 7c242de2708ed80ec9e2dd1f601c0166              155 Release
- b8689790a870a6e116892d516d21e883              787 main/binary-amd64/Packages
- 052670506e4fbb2987dd683f3fc63147              569 main/binary-amd64/Packages.gz
+ f5c5f2fa5d84dfb96ec5e5e418b2baa1              155 Release
+ 9252b5e804cf6e79ff7df5bcffd9808f              809 main/binary-amd64/Packages
+ 64fe474ceebfd7c974b7af3309ec2056              579 main/binary-amd64/Packages.gz
 SHA1:
- 251a752fc2343776e2493f5605430aee24dcb147              155 Release
- 8c118c270b7c5bf788e5086737264d384ea43800              787 main/binary-amd64/Packages
- 2487b9cffcc55368111c2b8f9501a77d4987ff28              569 main/binary-amd64/Packages.gz
+ 5fb686077943aacc320cecf1acbaaaa54a7fe0f8              155 Release
+ 3b42e133935d77cfd58e9ed732ece58b412a727f              809 main/binary-amd64/Packages
+ 66818d4f5bf6a08ac2060e7c91dbb122f22e809b              579 main/binary-amd64/Packages.gz
 SHA256:
- 712b69011106d59a6bf021aad9ab26e87effe341f6aa5068de847630c0e498ad              155 Release
- 34eac028faf16c952901f6fb62e5e502c9f80b914712dfd01b92453d7bcdd31d              787 main/binary-amd64/Packages
- 5d5cd5ab17fd9fafca461d13e3ab5a4fb797b331acdf8ea4959ac51a8b8c9aa8              569 main/binary-amd64/Packages.gz
+ 16c5a67c30ea0dedc2eede99728214d30dbbc1eeb9922e9aa8c6112bf15b7d61              155 Release
+ 013f2e476f256a9902409718b81a837a3ec40292ff5e76d639e9ee97fd5d020a              809 main/binary-amd64/Packages
+ 84375729030216932bd069431dca76ef0464886254d7fe268517730d0d25c0ad              579 main/binary-amd64/Packages.gz
 SHA512:
- a3ff17ff84fb15d2eb3ed64f42ce14eba9c45dcabbccad07ea7e9657847dba75c637b956fc7bf22b562d0bc51dd89f42c6bba3e1bf0a09301ea965a1679ca62d              155 Release
- c2a19aa4de550069368129ff263fbfd936bb331eda3e1c3365b409f9137b452395372c647a4bfb35f81bc414cc2f425d14c1ad24a270766aed705fa72176f428              787 main/binary-amd64/Packages
- a551c9c4fb893b22f39343db30bb9f47faa9cbb496dc6d3714defbc147d497649b84a0fb242490a7da702f4e81b6b16a11c4e8746eb500e0cbf4b18092390756              569 main/binary-amd64/Packages.gz
+ cd129b13a2f11dd115cf742a968eab77892693f146e143c673afc6824f7d52e6252ffdd7d94fafc89ab5a37090bb67c825368a0076161cb4730f99e62ec2f10a              155 Release
+ d1a554c73bdd7a1c770f3a5476f945c817ece818989369805f68a6e4e9b645bc3723f60cd821505faaf2efaa2581eae1167b4696fdfbf989f630e9aeddc0ab39              809 main/binary-amd64/Packages
+ 9b9bef7f29ac439edbbca3a249518724ed9349621924a71efb4c9702953aca1324a0ac13b656692bcaf2add8913188617f101c239e1239131ea7d63764538097              579 main/binary-amd64/Packages.gz
