@@ -34,6 +34,11 @@
   <developer_name>Aditya Krishnan</developer_name>
 
   <releases>
+    <release version="1.1.2" date="2026-11-06">
+      <description>
+        <p>Support for GNOME 51 and Fedora 45, D-Bus window tracking enhancements, and updated packaging.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-10-25"/>
     <release version="0.1.0" date="2026-08-16"/>
   </releases>

@@ -178,10 +178,10 @@ export default class ScreenGuardExtension extends Extension {
                 const pid = win.get_pid() || 0;
                 result.push([app.toLowerCase(), title, pid]);
             }
-            return [result];
+            return result;
         } catch (e) {
             console.error(`[ScreenGuard] Error in ListAllWindows: ${e}`);
-            return [[]];
+            return [];
         }
     }
 }

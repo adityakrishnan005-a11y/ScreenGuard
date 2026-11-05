@@ -1,7 +1,7 @@
 # Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
 pkgname=screenguard
-pkgver=0.1.1
-pkgrel=2
+pkgver=1.1.2
+pkgrel=1
 pkgdesc="Screen time tracker for Linux (Flutter GUI + Dart daemon)"
 arch=('x86_64')
 url="https://github.com/adityakrishnan005-a11y/ScreenGuard"
@@ -15,7 +15,7 @@ optdepends=(
 provides=('screenguard')
 conflicts=('screenguard-git')
 source=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v$pkgver/$pkgname-$pkgver-x86_64.tar.gz")
-sha256sums=('535995bbd66771b87e504e4d93b1f0cc655462e1c7e4011f62ccbc07e2cd2793')
+sha256sums=('612de79693f19f9ebd4b51efa4054d08b36d5780d2594bcdfa296259eb544ed1')
 
 package() {
   # The release tarball has no top-level directory; it contains the app bundle

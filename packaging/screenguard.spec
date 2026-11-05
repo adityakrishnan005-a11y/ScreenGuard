@@ -1,6 +1,6 @@
 Name:           screenguard
-Version:        0.1.1
-Release:        2%{?dist}
+Version:        1.1.2
+Release:        1%{?dist}
 Summary:        Digital Wellbeing for Linux - Screen Time Tracking, Daily App Limits & Focus Mode
 License:        GPL-3.0-or-later
 URL:            https://github.com/adityakrishnan005-a11y/ScreenGuard

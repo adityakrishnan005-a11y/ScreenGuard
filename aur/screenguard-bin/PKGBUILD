@@ -1,7 +1,7 @@
 # Maintainer: Aditya Krishnan <aditya.krishnan005@gmail.com>
 pkgname=screenguard-bin
-pkgver=0.1.1
-pkgrel=2
+pkgver=1.1.2
+pkgrel=1
 pkgdesc="ScreenGuard — Digital Wellbeing for Linux (Screen time tracking, daily app limits & focus mode)"
 arch=('x86_64')
 url="https://github.com/adityakrishnan005-a11y/ScreenGuard"
@@ -29,7 +29,7 @@ source=(
   "extension.js::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/extension/extension.js"
 )
 sha256sums=(
-  '535995bbd66771b87e504e4d93b1f0cc655462e1c7e4011f62ccbc07e2cd2793'
+  '612de79693f19f9ebd4b51efa4054d08b36d5780d2594bcdfa296259eb544ed1'
   '3c4e9707079f6fd369436376aa94d59874f516f069f1f3f7c3054afe3c374ea3'
   'a521de5318b9413a57e52b24d0c43456a9509eb140454d28e2e143f9efafd654'
   'eef09f0c07aa64c2b143a9b417bdd51665c8a382ba6d0599b65b4901ea795135'
@@ -38,8 +38,8 @@ sha256sums=(
   '4c9c89af603dbf3fd9f7f2f729d5ba34fe5f32fb77fd2dcd08bad606aa11eb88'
   'df04e5369ac029e9754a9bc591f340efbff30a203581cd51e5fccec0341ae3e2'
   '87c8781dd3af27cd59bf63fd98787d3c2553c2266d7d130d703a80561202ef3a'
-  '65cb77e23a8177dcc00f03ddddeed101e7840039e940c01bdd6ff87d1e8b55a3'
-  '837a7c59b24597d2a1e0df89406e785cd1318d0f1395adcb2e2c26f2a1c4f034'
+  'cde88216e41a390bf2f6b43f19b3ac74577ad91ea265c79e2e72946ca2c4b186'
+  'c47209177ff3787dd1e15fff515db6f10cdd912ffa7b0ca4078929aaef903f8b'
 )
 
 package() {
