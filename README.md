@@ -166,6 +166,22 @@ sudo dnf copr enable the-amibivert/screenguard
 sudo dnf install screenguard
 ```
 
+### openSUSE (Tumbleweed / Leap 15.6 / Leap 16.0)
+
+One-click install (pick your release on the page):
+[software.opensuse.org → screenguard](https://software.opensuse.org/download.html?project=home%3AAditya_K295&package=screenguard)
+
+Or via the terminal (Tumbleweed shown — swap `openSUSE_Tumbleweed` for `openSUSE_Leap_16.0` or `openSUSE_Leap_15.6` on Leap):
+```bash
+sudo zypper addrepo https://download.opensuse.org/repositories/home:/Aditya_K295/openSUSE_Tumbleweed/home:Aditya_K295.repo
+sudo zypper refresh && sudo zypper install screenguard
+```
+> Package builds are hosted on the [Open Build Service](https://build.opensuse.org/package/show/home:Aditya_K295/screenguard); a move into the official openSUSE distribution is planned.
+
+### NixOS / Nix (nixpkgs)
+
+A nixpkgs package is being submitted upstream — see the draft and build recipe in [`packaging/nix/`](packaging/nix/README.md) (modeled on Saber's Flutter packaging). Until it merges, Nix users can build the expression manually from a nixpkgs checkout; after merge: `nix profile install nixpkgs#screenguard`.
+
 ### Arch Linux / Manjaro (custom repository)
 
 > The AUR package is coming soon (AUR account registration is temporarily suspended). Until then, use our signed custom repository:
