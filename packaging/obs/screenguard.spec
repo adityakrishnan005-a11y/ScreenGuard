@@ -12,7 +12,7 @@
 Name:              screenguard
 Version:           1.1.2
 Release:           1%{?dist}
-Summary:           Digital Wellbeing for Linux — Screen Time Tracking, Daily App Limits & Focus Mode
+Summary:           Digital Wellbeing for Linux (Screen time & Focus)
 License:           GPL-3.0-or-later
 URL:               https://github.com/adityakrishnan005-a11y/ScreenGuard
 
@@ -106,9 +106,19 @@ install -d %{buildroot}%{_datadir}/gnome-shell/extensions/screenguard@screenguar
 install -pm0644 %{SOURCE7} %{buildroot}%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/metadata.json
 install -pm0755 %{SOURCE8} %{buildroot}%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/extension.js
 
+# install -Dpm0644 %{SOURCE2} ... (existing install block above this comment)
+
+# Normalize helper shebangs for rpmlint (env-script-interpreter)
+sed -i '1s|^#!/usr/bin/env bash$|#!/bin/bash|' %{buildroot}%{_datadir}/screenguard/*.sh
+sed -i '1s|^#!/usr/bin/env python3$|#!/usr/bin/python3|' %{buildroot}%{_datadir}/screenguard/*.py
+sed -i '1s|^#!/usr/bin/env bash$|#!/bin/bash|' %{buildroot}/opt/screenguard/install.sh %{buildroot}/opt/screenguard/migrate.sh 2>/dev/null || :
+
 # License and documentation
 install -Dpm0644 %{SOURCE11} LICENSE
 install -Dpm0644 %{SOURCE12} README.md
+
+%check
+: # nothing to test (pre-built release bundle)
 
 %files
 %license LICENSE
@@ -124,9 +134,16 @@ install -Dpm0644 %{SOURCE12} README.md
 %{_datadir}/applications/screenguard.desktop
 %{_datadir}/metainfo/org.screenguard.ScreenGuard.appdata.xml
 %{_sysconfdir}/xdg/autostart/screenguard-autostart.desktop
+%dir %{_datadir}/icons/hicolor
+%dir %{_datadir}/icons/hicolor/256x256
+%dir %{_datadir}/icons/hicolor/256x256/apps
 %{_datadir}/icons/hicolor/256x256/apps/screenguard.png
+%dir %{_datadir}/gnome-shell
+%dir %{_datadir}/gnome-shell/extensions
+%dir %{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/
+%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/metadata.json
+%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/extension.js
 %{_datadir}/screenguard/
-%{_datadir}/gnome-shell/extensions/screenguard@screenguard.app/
 
 %post
 %systemd_user_post screenguard.service

@@ -1,12 +1,21 @@
 # rpmlint exceptions for the ScreenGuard openSUSE package.
-# Rationale: the package installs a prebuilt Flutter bundle (with its own
-# bundled .so files and rpath), a Dart AOT daemon, and C helper binaries.
-# Kinds of messages this suppresses:
-#   * static/shared-lib information checks against bundle-internal objects
-#   * ldconfig cache churn for libraries that never live in system lib dirs
-# Trim any line openSUSE stewards dispute during review.
-addFilter("statically-linked-binary")
-addFilter("shared-lib-without-dependency-information")
-addFilter("^screenguard\\..*: W: no-dependency-on")
-addFilter("library-without-ldconfig-postin")
-addFilter("library-without-ldconfig-postun")
+# Every filter below is a documented, justified exception:
+#
+#  * filelist-forbidden-opt — ScreenGuard's Flutter bundle must self-locate its
+#    assets relative to the executable; an /opt install keeps that guarantee
+#    for all distros uniformly (Copr, .deb, Arch and this spec).
+addFilter("filelist-forbidden-opt")
+#
+#  * binary-or-shlib-defines-rpath — Flutter desktop bundles set RUNPATH
+#    $ORIGIN (app) and $ORIGIN/lib (engine .so) by design, so the bundled
+#    engine libraries next to the executable are found without ldconfig.
+addFilter("binary-or-shlib-defines-rpath")
+#
+#  * missing-hash-section — Flutter's prebuilt libflutter_linux_gtk.so ships
+#    without a .hash/.gnu.hash section; upstream artifact, not fixable in
+#    packaging.
+addFilter("missing-hash-section")
+addFilter("missing-gnu-hash-section")
+#
+#  * dir-or-file-outside-snapshot — consequence of the /opt install above.
+addFilter("dir-or-file-outside-snapshot")
