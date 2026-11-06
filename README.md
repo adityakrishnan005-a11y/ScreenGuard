@@ -236,6 +236,22 @@ nfpm package -f packaging/nfpm.rpm.yaml -t dist/screenguard-0.1.1-1.x86_64.rpm
 
 ---
 
+## The ScreenGuard Suite — where this is going
+
+Every Linux user has felt it at some point: the desktop is *yours* in a way no other platform is — free, hackable, honest — and yet the day-to-day care stops there. On macOS and on phones, digital wellbeing is treated as a given; on Linux it barely exists.
+
+ScreenGuard is the start of the answer: a wellbeing app built *for* Linux rather than ported to it — spoken to over D-Bus, backed by a kernel watchdog, and at home on GNOME and KDE on Wayland, and every major desktop on X11. But one app on one device is only step one. The screen-time story doesn't end when you close the laptop, so the suite grows beyond it:
+
+* **🐧 ScreenGuard for Linux** — the core, evolving here (the roadmap below).
+* **🤖 ScreenGuard for Android** — the pocket companion: same dashboard language, limits, and Focus Mode on your phone.
+* **📺 ScreenGuard for TV** — the living room: the same wellbeing ideas for Android TV, built for a remote and a five-foot distance.
+
+One **openness line** nothing in the suite will ever cross: your data is yours — any syncing will be peer-over-network between your own devices, never with a cloud or an account.
+
+This is a multi-year effort, and each app gets its own repository the moment it's real. The full story — the why, the pace, and how to help — lives in the **[ScreenGuard Suite wiki page](https://github.com/adityakrishnan005-a11y/ScreenGuard/wiki/The-ScreenGuard-Suite)**.
+
+---
+
 ## Roadmap & Future Enhancements
 
 The next two milestones are focused on depth rather than breadth:
