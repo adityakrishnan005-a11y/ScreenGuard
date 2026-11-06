@@ -20,12 +20,20 @@ dart.fetchGitHashesScript --input packaging/nix/pubspec.lock.json --output packa
 
 ## 2. Fill the source hash
 
+`src` uses the **repo source tree at the tag** (not the release bundle), which
+is what `fetchFromGitHub` downloads. Compute its hash on any machine — no Nix
+required:
+
 ```sh
-nix flake prefetch nixpkgs#screenguard?  # no — do it manually:
-nix run nixpkgs#nix-prefetch-git -- https://github.com/adityakrishnan005-a11y/ScreenGuard v1.1.2 | jq .sha256
+curl -sL https://github.com/adityakrishnan005-a11y/ScreenGuard/archive/refs/tags/v1.1.2.tar.gz -o /tmp/sg.tar.gz
+python3 tools/github-nar-hash.py /tmp/sg.tar.gz
+# -> sha256-EwZX80LSUa1v84dAyjFdJpLEXqvi/m49tPbL2xQY/9Y=
 ```
 
-Put that into the `hash = "sha256-…"` in `package.nix`.
+`tools/github-nar-hash.py` reproduces Nix's fetchFromGitHub serialization
+byte-for-byte (calibrated against the saber-notes/saber store hash), so its
+output is trustworthy for future version bumps. Double-check on a Nix box
+anytime with `nix flake prefetch`.
 
 ## 3. Local-test build inside a nixpkgs checkout
 

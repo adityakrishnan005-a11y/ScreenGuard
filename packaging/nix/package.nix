@@ -29,7 +29,11 @@ let
     owner = "adityakrishnan005-a11y";
     repo = "ScreenGuard";
     tag = "v${version}";
-    hash = ""; # TODO `nix-prefetch-git`/`nix flake prefetch` or let nixpkgs-review print it
+    # Hash of the *source tree* at the tag (NOT the release bundle tarball).
+    # Refresh with: python3 tools/github-nar-hash.py <(curl -sL \
+    #   https://github.com/adityakrishnan005-a11y/ScreenGuard/archive/refs/tags/v$ver.tar.gz)
+    # (calibrated against nix's own fetcher, see tool docstring).
+    hash = "sha256-EwZX80LSUa1v84dAyjFdJpLEXqvi/m49tPbL2xQY/9Y=";
   };
 in
 flutter344.buildFlutterApplication {
