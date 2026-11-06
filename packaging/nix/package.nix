@@ -1,41 +1,51 @@
 # Package ScreenGuard for Nixpkgs — draft for upstream submission.
 #
 # Modeled on Saber (pkgs/by-name/sa/saber/package.nix), the canonical
-# packaged Flutter desktop app in nixpkgs. Generated files below
-# (`pubspec.lock.json`, `git-hashes.json`) must be regenerated with the
-# tooling described in README-nix.md before casting a PR.
+# packaged Flutter desktop app in nixpkgs. Every mechanic verified against
+# master sources (see docstrings/comments with "verified"):
+#   * postBuild IS a real hook: build-flutter-application.nix's linux
+#     buildPhase ends in `runHook postBuild` (after `flutter build linux`).
+#   * the linux installPhase moves the bundle to $out/app/$pname and
+#     auto-symlinks every top-level executable into $out/bin — do NOT
+#     create those symlinks manually (they collide).
+#   * dartFixupHook wraps $out/bin/* with LD_LIBRARY_PATH from
+#     `runtimeDependencies` plus `extraWrapProgramArgs` — helper tools the
+#     daemon shells out to therefore belong on PATH via extraWrapProgramArgs,
+#     NOT in runtimeDependencies (which lib.getLib-maps to lib dirs).
 {
   lib,
-  flutter344, # TODO choose the newest pinned Flutter in nixpkgs at PR time
-              # (check pkgs/development/compilers/flutter/; it has been
-              # flutter343/flutter344 historically)
+  flutter344,
   fetchFromGitHub,
-  dart,
   autoPatchelfHook,
   gtk3,
-  glib,
+  glib, # gio/gio.h for src/notify.c (headers via pkg-config)
+  at-spi2-core,
   xdotool,
   xprop,
   xprintidle,
-  python3, # TODO the distro packages python3-pyatspi; in nix use
-           # `python3.withPackages (p: [ p.pyatspi ])` (verify attr name)
-  at-spi2-core,
+  python3,
 }:
 
 let
   version = "1.1.2";
+
+  pyWithPyatspi = python3.withPackages (ps: [ ps.pyatspi ]); # verified attr: python3Packages.pyatspi
 
   src = fetchFromGitHub {
     owner = "adityakrishnan005-a11y";
     repo = "ScreenGuard";
     tag = "v${version}";
     # Hash of the *source tree* at the tag (NOT the release bundle tarball).
-    # Refresh with: python3 tools/github-nar-hash.py <(curl -sL \
-    #   https://github.com/adityakrishnan005-a11y/ScreenGuard/archive/refs/tags/v$ver.tar.gz)
-    # (calibrated against nix's own fetcher, see tool docstring).
+    # Refresh with:
+    #   curl -sL https://github.com/adityakrishnan005-a11y/ScreenGuard/archive/refs/tags/v1.1.2.tar.gz -o t.tgz
+    #   python3 tools/github-nar-hash.py t.tgz
+    # (calibrated byte-for-byte against Nix's fetcher; see tool docstring)
     hash = "sha256-EwZX80LSUa1v84dAyjFdJpLEXqvi/m49tPbL2xQY/9Y=";
   };
 in
+# flutter344 — same pin Saber ships today. Newer Flutters exist in the trunk
+# (versions/: 3_29..3_47) but Saber deliberately stays on 344 for the linux
+# build; revisit at PR time only if ofBorg forces it.
 flutter344.buildFlutterApplication {
   pname = "screenguard";
   inherit version src;
@@ -45,28 +55,35 @@ flutter344.buildFlutterApplication {
 
   nativeBuildInputs = [ autoPatchelfHook ];
 
-  # Runtime dependencies of the Flutter GTK bundle and the tracking helpers.
   buildInputs = [
     gtk3
     glib
     at-spi2-core
   ];
 
-  runtimeDependencies = [
-    xdotool
-    xprop
-    xprintidle
-    python3
-    at-spi2-core
-  ];
+  # The daemon/helpers exec xdotool, xprop, xprintidle and python (pyatspi)
+  # by name — make sure the wrapped $out/bin entries can find them.
+  extraWrapProgramArgs =
+    "--prefix PATH : ${lib.makeBinPath [ xdotool xprop xprintidle pyWithPyatspi ]}";
 
-  # TODO verify this hook exists in buildFlutterApplication; if it doesn't,
-  # compile via overrideAttrs postBuild / separate derivation.
+  # Runs after `flutter build linux`, before the bundle is moved to
+  # $out/app/screenguard — perfect place to merge the C helpers and the
+  # standalone daemon into the bundle (the hook then symlinks them into
+  # $out/bin for us).
+  #
+  # The daemon is NOT part of the flutter build (see tools/build-tarball.sh:
+  # `dart compile exe bin/daemon.dart`); it only needs a plain AOT dart exe.
+  # dontDartBuild skips the stock compile hook, but dartConfigHook still
+  # assembled .dart_tool/package_config.json from pub2nix's linked store
+  # sources, so package:screenguard/* resolve offline. `dart` on PATH is the
+  # flutter SDK's dart (buildAppWith overrides buildDartApplication's dart).
   postBuild = ''
-    # Native helper binaries (C) that ship alongside the Flutter bundle.
+    dart compile exe bin/daemon.dart -o build/linux/x64/release/bundle/screenguard-daemon
+
     cc src/watchdog.c -O2 -o build/linux/x64/release/bundle/screenguard-watchdog
-    cc src/notify.c -O2 -o build/linux/x64/release/bundle/screenguard-notify
-    cc src/killer.c -O2 -o build/linux/x64/release/bundle/screenguard-killer
+    cc src/killer.c  -O2 -o build/linux/x64/release/bundle/screenguard-killer
+    cc src/notify.c  -O2 $(pkg-config --cflags --libs gio-2.0) \
+        -o build/linux/x64/release/bundle/screenguard-notify
   '';
 
   postInstall = ''
@@ -75,20 +92,19 @@ flutter344.buildFlutterApplication {
     install -Dm0644 assets/icons/scalable/screenguard.svg $out/share/icons/hicolor/scalable/apps/screenguard.svg
     install -Dm0644 assets/icons/256x256/screenguard.png $out/share/icons/hicolor/256x256/apps/screenguard.png
 
-    # systemd user service + preset (systemd user units ship from $out in nixpkgs)
+    # systemd user service + preset (systemd.packages picks these from
+    # $out/lib/systemd). ExecStart must point at our OWN wrapper, /usr/bin
+    # does not exist on NixOS.
     install -Dm0644 linux/screenguard.service $out/lib/systemd/user/screenguard.service
     install -Dm0644 linux/50-screenguard.preset $out/lib/systemd/user-preset/50-screenguard.preset
+    substituteInPlace $out/lib/systemd/user/screenguard.service \
+      --replace-raw "ExecStart=/usr/bin/screenguard-daemon" "ExecStart=$out/bin/screenguard-daemon"
 
-    # Helper scripts used by the daemon
-    install -Dm0755 bin/active_window_helper.py $out/share/screenguard/active_window_helper.py
-    install -Dm0755 tools/enable_fedora_a11y.sh $out/share/screenguard/enable_fedora_a11y.sh
-    install -Dm0755 tools/migrate.sh $out/share/screenguard/migrate.sh
-
-    # PATH symlinks for the daemon and C helpers, mirroring distro packaging
-    install -d $out/bin
-    for bin in screenguard-daemon screenguard-watchdog screenguard-notify screenguard-killer; do
-      ln -s $out/app/screenguard/$bin $out/bin/$bin
-    done
+    # Helper script imported by the daemon (invoked with python3, which the
+    # wrappers put on PATH with pyatspi available)
+    install -Dm0644 bin/active_window_helper.py $out/app/screenguard/active_window_helper.py
+    install -Dm0644 tools/enable_fedora_a11y.sh $out/share/screenguard/enable_fedora_a11y.sh
+    install -Dm0644 tools/migrate.sh $out/share/screenguard/migrate.sh
   '';
 
   meta = {

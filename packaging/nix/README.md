@@ -4,24 +4,48 @@ ScreenGuard is a Flutter desktop app, and nixpkgs is the only major
 from-source package ecosystem that has a packaged Flutter SDK. The in-tree
 reference implementation is Saber:
 
-- `pkgs/by-name/sa/saber/package.nix` (`flutter.buildFlutterApplication`)
+- `pkgs/by-name/sa/saber/package.nix` (`flutter344.buildFlutterApplication`)
 
-`packaging/nix/package.nix` mirrors that shape. Before a real PR, do:
+`packaging/nix/package.nix` mirrors that shape.
 
-## 1. Generate the two metadata JSONs (from the repo root)
+## Mechanics — verified against nixpkgs master sources (no local Nix needed)
+
+- `postBuild` **is** a real hook: the linux `buildPhase` in
+  `pkgs/development/compilers/flutter/build-support/build-flutter-application.nix`
+  ends with `runHook postBuild` (after `flutter build linux`).
+- The linux `installPhase` moves the bundle to `$out/app/$pname` and
+  auto-symlinks every top-level executable into `$out/bin`. Do **not** create
+  those symlinks manually — they collide.
+- `dartFixupHook` (`pkgs/build-support/dart/build-dart-application/hooks/`)
+  wraps every `$out/bin/*` entry: `runtimeDependencies` becomes
+  `LD_LIBRARY_PATH`, and `extraWrapProgramArgs` is passed to `wrapProgram`.
+  Helper tools the daemon shells out to (`xdotool`, `xprop`, `xprintidle`,
+  python) therefore go on **PATH** via `extraWrapProgramArgs` +
+  `lib.makeBinPath`, *not* in `runtimeDependencies`.
+- The daemon is a plain `dart compile exe bin/daemon.dart` (not part of the
+  flutter build; see `tools/build-tarball.sh`). `buildFlutterApplication` sets
+  `dontDartBuild`, but `dart-config-hook` still assembles the pub2nix package
+  config, so `package:screenguard/*` imports resolve offline in `postBuild`.
+- `bin/active_window_helper.py` is located via the running binary's directory
+  first (`gnome_wayland_backend.dart`), so installing it into
+  `$out/app/screenguard/` next to the daemon works.
+- Newer Flutters than 344 exist in the trunk (`versions/`: 3_29..3_47) but
+  Saber deliberately stays on 344 for the linux build; revisit only if ofBorg
+  forces a change.
+
+## 1. Metadata JSONs — already generated
+
+`pubspec.lock.json` (44 packages) and `git-hashes.json` (`{}`, no git deps)
+are committed. Regenerate after dependency changes:
 
 ```sh
-# pubspec.lock.json — same trick Saber uses (yq from nixpkgs)
 yq eval --output-format=json --prettyPrint pubspec.lock > packaging/nix/pubspec.lock.json
-
-# git-hashes.json — helper shipped inside nixpkgs' dart package
-dart.fetchGitHashesScript --input packaging/nix/pubspec.lock.json --output packaging/nix/git-hashes.json
 ```
 
-## 2. Fill the source hash
+## 2. Source hash
 
 `src` uses the **repo source tree at the tag** (not the release bundle), which
-is what `fetchFromGitHub` downloads. Compute its hash on any machine — no Nix
+is what `fetchFromGitHub` downloads. Compute it on any machine — no Nix
 required:
 
 ```sh
@@ -44,13 +68,12 @@ cp ~/screenguard/packaging/nix/{package.nix,pubspec.lock.json,git-hashes.json} p
 nix-build -A screenguard   # pkgs/by-name auto-includes the package
 ```
 
-Fix whatever the build complains about. Expect iteration on:
+Expected iteration points (what ofBorg would reveal):
 
-- the `postBuild` hook (compiling `src/*.c` helpers inside the derivation —
-  verify whether `buildFlutterApplication` runs `postBuild`, else switch to
-  `overrideAttrs`)
-- runtime interpreter/lib paths (`active_window_helper.py` needs pyatspi)
-- the `flutter344` pin — choose the newest Flutter in nixpkgs at PR time
+- the manual `dart compile exe` in `postBuild` (extent of the flutter-dart
+  wrapper's tolerance for bare `dart compile`)
+- runtime interpreter/lib paths
+- the `flutter344` pin
 
 ## 4. PR to nixpkgs
 
