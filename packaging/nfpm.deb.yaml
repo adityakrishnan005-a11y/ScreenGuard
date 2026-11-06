@@ -48,6 +48,8 @@ contents:
     dst: /usr/lib/systemd/user-preset/50-screenguard.preset
   - src: linux/screenguard.desktop
     dst: /usr/share/applications/screenguard.desktop
+  - src: packaging/org.screenguard.ScreenGuard.appdata.xml
+    dst: /usr/share/metainfo/org.screenguard.ScreenGuard.appdata.xml
   - src: linux/screenguard-autostart.desktop
     dst: /etc/xdg/autostart/screenguard-autostart.desktop
   - src: bin/active_window_helper.py

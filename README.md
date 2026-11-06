@@ -294,7 +294,7 @@ Contributions are warmly welcomed! ScreenGuard is built by and for the Linux com
 
 Whether you want to:
 * **Report a bug** or suggest a feature via GitHub Issues *(for X11 issue reports, please attach screenshot or video proof along with your DE name and version)*.
-* **Help package ScreenGuard** for Flathub (Flatpak), Snapcraft, or Gentoo.
+* **Help package ScreenGuard** for more distributions — openSUSE (OBS), NixOS (nixpkgs), or Gentoo (GURU).
 * **Translate ScreenGuard** into new languages.
 * **Submit Code / PRs**: Check out open issues and submit a Pull Request!
 

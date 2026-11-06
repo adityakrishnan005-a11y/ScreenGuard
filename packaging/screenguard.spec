@@ -21,6 +21,7 @@ Source9:        https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenG
 Source10:       https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v%{version}/tools/migrate.sh
 Source11:       https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v%{version}/LICENSE
 Source12:       https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v%{version}/README.md
+Source13:       https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v%{version}/packaging/org.screenguard.ScreenGuard.appdata.xml
 
 ExclusiveArch:  x86_64
 
@@ -72,6 +73,9 @@ install -Dm644 %{SOURCE9} %{buildroot}%{_userpresetdir}/50-screenguard.preset
 install -Dm644 %{SOURCE2} %{buildroot}%{_datadir}/applications/screenguard.desktop
 install -Dm644 %{SOURCE3} %{buildroot}%{_sysconfdir}/xdg/autostart/screenguard-autostart.desktop
 
+# AppStream metadata (software centers / GNOME Software / Discover)
+install -Dm644 %{SOURCE13} %{buildroot}%{_datadir}/metainfo/org.screenguard.ScreenGuard.appdata.xml
+
 # Helper scripts
 install -Dm755 %{SOURCE5} %{buildroot}%{_datadir}/screenguard/active_window_helper.py
 install -Dm755 %{SOURCE6} %{buildroot}%{_datadir}/screenguard/enable_fedora_a11y.sh
@@ -98,6 +102,7 @@ install -Dm644 %{SOURCE12} README.md
 %{_userunitdir}/screenguard.service
 %{_userpresetdir}/50-screenguard.preset
 %{_datadir}/applications/screenguard.desktop
+%{_datadir}/metainfo/org.screenguard.ScreenGuard.appdata.xml
 %{_sysconfdir}/xdg/autostart/screenguard-autostart.desktop
 %{_datadir}/icons/hicolor/256x256/apps/screenguard.png
 %{_datadir}/screenguard/

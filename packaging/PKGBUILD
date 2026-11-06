@@ -45,6 +45,7 @@ package() {
   install -Dm644 "$repo_root/linux/50-screenguard.preset" "$pkgdir/usr/lib/systemd/user-preset/50-screenguard.preset"
   install -Dm644 "$repo_root/linux/screenguard.desktop" "$pkgdir/usr/share/applications/screenguard.desktop"
   install -Dm644 "$repo_root/linux/screenguard-autostart.desktop" "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"
+  install -Dm644 "$repo_root/packaging/org.screenguard.ScreenGuard.appdata.xml" "$pkgdir/usr/share/metainfo/org.screenguard.ScreenGuard.appdata.xml"
 
   # Helper scripts
   install -Dm755 "$repo_root/bin/active_window_helper.py" "$pkgdir/usr/share/screenguard/active_window_helper.py"

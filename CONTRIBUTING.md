@@ -53,7 +53,7 @@ Feature requests are tracked in [GitHub Issues](https://github.com/adityakrishna
 
 ### Packaging & Distribution
 
-Help is always welcome for expanding ScreenGuard packaging to new distributions and package formats (Flatpak/Flathub, Snap, openSUSE OBS, Gentoo ebuilds, etc.). Check the `packaging/` directory for existing NFPM and spec templates.
+Help is always welcome for expanding ScreenGuard packaging to new distributions and package formats (openSUSE OBS, NixOS, Gentoo ebuilds, etc. — check `packaging/` for the existing NFPM and spec templates). ScreenGuard is **not being published to Flathub** (the `org.screenguard.*` app ID requires domain ownership that is not available), and Snap is intentionally not a priority channel.
 
 ---
 

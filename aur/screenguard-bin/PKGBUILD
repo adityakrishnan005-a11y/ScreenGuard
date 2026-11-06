@@ -27,6 +27,7 @@ source=(
   "migrate.sh::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/tools/migrate.sh"
   "metadata.json::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/extension/metadata.json"
   "extension.js::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/extension/extension.js"
+  "org.screenguard.ScreenGuard.appdata.xml::https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v$pkgver/packaging/org.screenguard.ScreenGuard.appdata.xml"
 )
 sha256sums=(
   '612de79693f19f9ebd4b51efa4054d08b36d5780d2594bcdfa296259eb544ed1'
@@ -40,6 +41,7 @@ sha256sums=(
   '87c8781dd3af27cd59bf63fd98787d3c2553c2266d7d130d703a80561202ef3a'
   'cde88216e41a390bf2f6b43f19b3ac74577ad91ea265c79e2e72946ca2c4b186'
   'c47209177ff3787dd1e15fff515db6f10cdd912ffa7b0ca4078929aaef903f8b'
+  '271678b0ec0d5fcd47cd834835cb94fb1d7fdd39963b8f70560c5aa17744e22a'
 )
 
 package() {
@@ -65,6 +67,7 @@ package() {
   install -Dm644 "$srcdir/screenguard.service" "$pkgdir/usr/lib/systemd/user/screenguard.service"
   install -Dm644 "$srcdir/50-screenguard.preset" "$pkgdir/usr/lib/systemd/user-preset/50-screenguard.preset"
   install -Dm644 "$srcdir/screenguard.desktop" "$pkgdir/usr/share/applications/screenguard.desktop"
+  install -Dm644 "$srcdir/org.screenguard.ScreenGuard.appdata.xml" "$pkgdir/usr/share/metainfo/org.screenguard.ScreenGuard.appdata.xml"
   install -Dm644 "$srcdir/screenguard-autostart.desktop" "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"
 
   # Helper scripts
