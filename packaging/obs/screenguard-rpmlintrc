@@ -1,0 +1,12 @@
+# rpmlint exceptions for the ScreenGuard openSUSE package.
+# Rationale: the package installs a prebuilt Flutter bundle (with its own
+# bundled .so files and rpath), a Dart AOT daemon, and C helper binaries.
+# Kinds of messages this suppresses:
+#   * static/shared-lib information checks against bundle-internal objects
+#   * ldconfig cache churn for libraries that never live in system lib dirs
+# Trim any line openSUSE stewards dispute during review.
+addFilter("statically-linked-binary")
+addFilter("shared-lib-without-dependency-information")
+addFilter("^screenguard\\..*: W: no-dependency-on")
+addFilter("library-without-ldconfig-postin")
+addFilter("library-without-ldconfig-postun")

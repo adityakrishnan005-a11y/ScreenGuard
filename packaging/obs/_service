@@ -1,0 +1,12 @@
+<!--
+  OBS source service: fetches the pinned release tarball into the package
+  directory at commit time. Bump the version here when a release is tagged,
+  then run: osc service runall
+-->
+<services>
+  <service name="download_url" mode="manual">
+    <param name="protocol">https</param>
+    <param name="host">github.com</param>
+    <param name="path">/adityakrishnan005-a11y/ScreenGuard/releases/download/v1.1.2/screenguard-1.1.2-x86_64.tar.gz</param>
+  </service>
+</services>
