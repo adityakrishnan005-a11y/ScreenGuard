@@ -180,7 +180,11 @@ sudo zypper refresh && sudo zypper install screenguard
 
 ### NixOS / Nix (nixpkgs)
 
-A nixpkgs package is being submitted upstream — see the draft and build recipe in [`packaging/nix/`](packaging/nix/README.md) (modeled on Saber's Flutter packaging). Until it merges, Nix users can build the expression manually from a nixpkgs checkout; after merge: `nix profile install nixpkgs#screenguard`.
+ScreenGuard is officially submitted to upstream nixpkgs ([PR #584824](https://github.com/NixOS/nixpkgs/pull/584824)). Until it merges, Nix users can test the package directly from the PR branch:
+```bash
+nix-shell -E 'let pkgs = import (fetchTarball "https://github.com/adityakrishnan005-a11y/nixpkgs/archive/screenguard.tar.gz") {}; in pkgs.screenguard'
+```
+After merge: `nix profile install nixpkgs#screenguard` or `environment.systemPackages = [ pkgs.screenguard ];`.
 
 ### Arch Linux / Manjaro (custom repository)
 
