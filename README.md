@@ -157,7 +157,7 @@ sudo apt update && sudo apt install screenguard
 
 **Option B — standalone `.deb`:**
 ```bash
-wget https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v0.1.1/screenguard_0.1.1_amd64.deb && sudo apt install ./screenguard_0.1.1_amd64.deb -y
+wget https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/download/v1.1.2/screenguard_1.1.2_amd64.deb && sudo apt install ./screenguard_1.1.2_amd64.deb -y
 ```
 
 ### Fedora / RHEL / Rocky Linux (Copr)
@@ -250,8 +250,8 @@ flutter build linux --release
 dart compile exe bin/daemon.dart -o build/linux/x64/release/bundle/screenguard-daemon
 
 # 4. (Optional) Create .deb and .rpm packages
-nfpm package -f packaging/nfpm.deb.yaml -t dist/screenguard_0.1.1_amd64.deb
-nfpm package -f packaging/nfpm.rpm.yaml -t dist/screenguard-0.1.1-1.x86_64.rpm
+nfpm package -f packaging/nfpm.deb.yaml -t dist/screenguard_1.1.2_amd64.deb
+nfpm package -f packaging/nfpm.rpm.yaml -t dist/screenguard-1.1.2-1.x86_64.rpm
 ```
 
 ---
