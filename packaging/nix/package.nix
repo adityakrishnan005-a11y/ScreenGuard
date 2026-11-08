@@ -1,8 +1,6 @@
-# Package ScreenGuard for Nixpkgs — draft for upstream submission.
-#
 # Modeled on Saber (pkgs/by-name/sa/saber/package.nix), the canonical
 # packaged Flutter desktop app in nixpkgs. Every mechanic verified against
-# master sources (see docstrings/comments with "verified"):
+# master sources:
 #   * postBuild IS a real hook: build-flutter-application.nix's linux
 #     buildPhase ends in `runHook postBuild` (after `flutter build linux`).
 #   * the linux installPhase moves the bundle to $out/app/$pname and
@@ -112,7 +110,7 @@ flutter344.buildFlutterApplication {
     homepage = "https://github.com/adityakrishnan005-a11y/ScreenGuard";
     mainProgram = "screenguard";
     license = lib.licenses.gpl3Only;
-    maintainers = with lib.maintainers; [ ];
+    maintainers = with lib.maintainers; [ adityakrishnan005-a11y ];
     platforms = [
       "x86_64-linux"
       "aarch64-linux"
