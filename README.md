@@ -1,5 +1,17 @@
+<div align="center">
+
+<img src="assets/icons/256x256/screenguard.png" alt="ScreenGuard logo" width="96"/>
+
 # ScreenGuard — Digital Wellbeing for Linux 🛡️
-> Modern Screen Time Tracking, Daily App Limits & Focus Mode for Wayland & X11.
+**Modern Screen Time Tracking, Daily App Limits & Focus Mode for Wayland & X11**
+
+[![Version](https://img.shields.io/github/v/release/adityakrishnan005-a11y/ScreenGuard?display_name=tag&sort=semver&color=teal&label=latest%20release)](https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/latest)
+[![License](https://img.shields.io/github/license/adityakrishnan005-a11y/ScreenGuard?color=teal)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/adityakrishnan005-a11y/ScreenGuard?color=teal)](https://github.com/adityakrishnan005-a11y/ScreenGuard/stargazers)
+![Platform](https://img.shields.io/badge/platform-Linux%20%C2%B7%20Wayland%20%C2%B7%20X11-teal)
+![Local](https://img.shields.io/badge/data-local%20only-teal)
+
+</div>
 
 **ScreenGuard** is an open-source, privacy-first desktop application built in Flutter for Linux. It brings active **Android-style Digital Wellbeing**, **Daily App Limit Lockouts**, and **Focus Mode Pomodoro Session Blocking** directly to the Linux desktop.
 
