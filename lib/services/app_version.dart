@@ -7,7 +7,7 @@
 /// [value] so every component still agrees.
 class AppVersion {
   /// Canonical version of the current release.
-  static const String value = '1.1.2';
+  static const String value = '1.2.0-beta.1';
 
   /// Version of the running binary.
   static const String current =
