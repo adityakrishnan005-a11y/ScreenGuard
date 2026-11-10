@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScreenGuard — Digital Wellbeing for Linux</title>
+<meta name="description" content="Open-source screen time tracking, daily app limits and focus mode for Linux. GNOME Wayland and X11. Local-first, GPL-3.0.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="ScreenGuard — Digital Wellbeing for Linux">
+<meta property="og:description" content="Screen time tracking, daily app limits and focus mode for Linux. GNOME Wayland and X11. Local-first, GPL-3.0.">
+<meta property="og:image" content="https://adityakrishnan005-a11y.github.io/ScreenGuard/icon.png">
+<style>
+  :root{
+    --blue:#0284c7; --blue2:#0ea5e9; --ink:#0b1a1a; --muted:#5b6b73;
+    --line:#dbe7ee; --bg:#f5fafd;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:-apple-system,"Segoe UI",Ubuntu,Cantarell,"Noto Sans",sans-serif;
+    background:radial-gradient(1200px 600px at 50% -10%,#e0f2fe 0%,var(--bg) 55%,#ffffff 100%);
+    color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:48px 20px;
+  }
+  .card{width:100%;max-width:680px;text-align:center}
+  .icon{width:132px;height:132px;border-radius:28px;box-shadow:0 18px 40px rgba(3,105,161,.18);background:#fff}
+  h1{font-size:44px;letter-spacing:-1.5px;margin:22px 0 6px}
+  .tag{color:var(--muted);font-size:19px;line-height:1.5;max-width:540px;margin:0 auto}
+  .chips{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:22px 0 26px}
+  .chip{font-size:13px;font-weight:600;color:#075985;border:1px solid #bae6fd;background:#e0f2fe;border-radius:999px;padding:6px 14px}
+  .buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:34px}
+  .btn{display:inline-block;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:12px;border:1px solid var(--line);color:var(--ink);background:#fff;transition:transform .15s ease, box-shadow .15s ease}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(3,105,161,.12)}
+  .btn.primary{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;border:none;box-shadow:0 10px 24px rgba(2,132,199,.35)}
+  .badge{margin:6px 0 30px}
+  .badge img{vertical-align:middle}
+  footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+  footer a{color:var(--blue);text-decoration:none}
+</style>
+</head>
+<body>
+<main class="card">
+  <img class="icon" src="icon.png" alt="ScreenGuard app icon" width="132" height="132">
+  <h1>ScreenGuard</h1>
+  <p class="tag">Android-style Digital Wellbeing for Linux — screen time tracking, daily app limits, and focus mode. GNOME Wayland &amp; X11, local-first.</p>
+  <div class="chips">
+    <span class="chip">Wayland &amp; X11</span>
+    <span class="chip">Daily app limits</span>
+    <span class="chip">Focus mode</span>
+    <span class="chip">Local-first data</span>
+    <span class="chip">GPL-3.0</span>
+  </div>
+  <div class="buttons">
+    <a class="btn primary" href="https://github.com/adityakrishnan005-a11y/ScreenGuard">View on GitHub</a>
+    <a class="btn" href="https://github.com/adityakrishnan005-a11y/ScreenGuard#installation">Install</a>
+    <a class="btn" href="https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/latest">Latest release</a>
+  </div>
+  <div class="badge">
+    <a href="https://launchnest.io/p/screenguard" target="_blank" rel="noopener">
+      <img src="https://launchnest.io/badge/screenguard.svg?variant=featured" alt="ScreenGuard on LaunchNest" width="220" height="56">
+    </a>
+  </div>
+  <footer>
+    Open source · GPL-3.0 · Made by <a href="https://github.com/adityakrishnan005-a11y">Aditya Krishnan</a>
+  </footer>
+</main>
+</body>
+</html>
