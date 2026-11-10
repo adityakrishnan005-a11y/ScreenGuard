@@ -11,6 +11,12 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20%C2%B7%20Wayland%20%C2%B7%20X11-teal)
 ![Local](https://img.shields.io/badge/data-local%20only-teal)
 
+<br/>
+
+<a href="https://launchnest.io/p/screenguard" target="_blank">
+  <img src="https://launchnest.io/badge/screenguard.svg?variant=featured&theme=light" alt="ScreenGuard on LaunchNest" width="220" height="56" />
+</a>
+
 </div>
 
 **ScreenGuard** is an open-source, privacy-first desktop application built in Flutter for Linux. It brings active **Android-style Digital Wellbeing**, **Daily App Limit Lockouts**, and **Focus Mode Pomodoro Session Blocking** directly to the Linux desktop.
