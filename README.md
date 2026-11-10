@@ -8,11 +8,14 @@
 [![Version](https://img.shields.io/github/v/release/adityakrishnan005-a11y/ScreenGuard?display_name=tag&sort=semver&color=teal&label=latest%20release)](https://github.com/adityakrishnan005-a11y/ScreenGuard/releases/latest)
 [![License](https://img.shields.io/github/license/adityakrishnan005-a11y/ScreenGuard?color=teal)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/adityakrishnan005-a11y/ScreenGuard?color=teal)](https://github.com/adityakrishnan005-a11y/ScreenGuard/stargazers)
+![Platform](https://img.shields.io/badge/platform-Linux%20%C2%B7%20Wayland%20%C2%B7%20X11-teal)
+![Local](https://img.shields.io/badge/data-local%20only-teal)
+
+<br/>
+
 <a href="https://launchnest.io/p/screenguard" rel="dofollow" title="github.com — Domain Rating by LaunchNest">
   <img src="https://launchnest.io/api/badge/dr?domain=github.com&style=normal&shape=round&color=white" alt="github.com Domain Rating" width="240" />
 </a>
-![Platform](https://img.shields.io/badge/platform-Linux%20%C2%B7%20Wayland%20%C2%B7%20X11-teal)
-![Local](https://img.shields.io/badge/data-local%20only-teal)
 
 </div>
 
