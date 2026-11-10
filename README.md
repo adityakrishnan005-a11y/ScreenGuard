@@ -13,8 +13,8 @@
 
 <br/>
 
-<a href="https://launchnest.io/p/screenguard" target="_blank">
-  <img src="https://launchnest.io/badge/screenguard.svg?variant=featured&theme=light" alt="ScreenGuard on LaunchNest" width="220" height="56" />
+<a href="https://launchnest.io/p/screenguard-2" target="_blank">
+  <img src="https://launchnest.io/badge/screenguard-2.svg?variant=featured" alt="ScreenGuard on LaunchNest" width="220" height="56" />
 </a>
 
 </div>
