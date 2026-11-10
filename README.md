@@ -13,7 +13,7 @@
 
 <br/>
 
-<a href="https://launchnest.io/p/screenguard" rel="dofollow" title="github.com — Domain Rating by LaunchNest">
+<a href="https://launchnest.io/p/screenguard" title="github.com — Domain Rating by LaunchNest">
   <img src="https://launchnest.io/api/badge/dr?domain=github.com&style=normal&shape=round&color=white" alt="github.com Domain Rating" width="240" />
 </a>
 
