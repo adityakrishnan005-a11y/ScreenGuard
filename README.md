@@ -56,14 +56,19 @@ In the spirit of open-source transparency and clear attribution, here is the exa
 
 ---
 
-### 2. Week-by-Week Navigation & History Slider
+### 2. Week-by-Week History, Reports & Per-App Detail
 * **Multi-Week History**: Slide back week by week (`<` / `>`) to view previous weeks.
 * **Interactive Day Inspector**: Tap any bar in the chart to load that specific day's app breakdown (e.g. `Most Used Apps (Wednesday, Aug 12)`).
+* **Reports**: 30-day trends with daily average, total screen time, busiest day, focus sessions completed and days within your goal.
+* **Per-App Pages**: Any app opens into its own page with 7-day usage, daily average and its current daily limit.
 
-![Previous Week Navigation](docs/assets/week_history_prev.png)
-![Next Week Navigation](docs/assets/week_history_next.png)
+![Reports](docs/assets/reports.png)
 
-*Week-by-week history navigation.*
+*Reports — 30-day trends.*
+
+![Per-app detail](docs/assets/app_detail.png)
+
+*Per-app page for LibreWolf.*
 
 ---
 
@@ -77,7 +82,7 @@ In the spirit of open-source transparency and clear attribution, here is the exa
 
 ![Daily App Limit Dialog](docs/assets/app_limit_dialog.png)
 
-*Daily app limit lockout.*
+*Daily limit dialog — presets or custom minutes.*
 
 ---
 
@@ -88,13 +93,9 @@ In the spirit of open-source transparency and clear attribution, here is the exa
 * **Strict Auto-Close (Optional)**: Optionally close blocked apps instead of minimizing them when they are opened during a focus session.
 * **Focus Statistics**: Tracks completed focus sessions per day.
 
-![Focus Mode](docs/assets/focus_mode.webp)
+![Focus Mode](docs/assets/focus_mode.png)
 
 *Focus Mode with app picker. Window transparency is done by Blur My Shell.*
-
-![Distraction Blocker & Notification](docs/assets/focus_mode_blocker.png)
-
-*Distraction blocker & notification.*
 
 ---
 
@@ -108,29 +109,33 @@ In the spirit of open-source transparency and clear attribution, here is the exa
 > Window transparency in the screenshots below is done by the **Blur My Shell** GNOME extension, not by ScreenGuard.
 
 #### General
-![Settings — General](docs/assets/settings_general.webp)
+![Settings — General](docs/assets/settings_general.png)
 
-*Settings → General. Window transparency is done by Blur My Shell.*
+*Settings → General: theme mode, notifications, sounds and custom audio.*
+
+![Settings — General, alert events](docs/assets/settings_general_alerts.png)
+
+*Settings → General, continued: per-event alert toggles and the feedback controls.*
 
 #### Limits & Pomodoro
-![Settings — Limits & Pomodoro](docs/assets/settings_limits_pomodoro.webp)
+![Settings — Limits & Pomodoro](docs/assets/settings_limits_pomodoro.png)
 
-*Settings → Limits & Pomodoro. Window transparency is done by Blur My Shell.*
+*Settings → Limits & Pomodoro.*
 
 #### Diagnostics
-![Settings — Diagnostics](docs/assets/settings_diagnostics.webp)
+![Settings — Diagnostics](docs/assets/settings_diagnostics.png)
 
-*Settings → Diagnostics. Window transparency is done by Blur My Shell.*
+*Settings → Diagnostics: daemon status, autostart and anonymous diagnostics.*
 
 #### Updates
-![Settings — Updates](docs/assets/settings_updates.webp)
+![Settings — Updates](docs/assets/settings_updates.png)
 
-*Settings → Updates. Window transparency is done by Blur My Shell.*
+*Settings → Updates: check frequency, beta channel and current version.*
 
 #### Data
-![Settings — Data](docs/assets/settings_data.webp)
+![Settings — Data](docs/assets/settings_data.png)
 
-*Settings → Data. Window transparency is done by Blur My Shell.*
+*Settings → Data: stored usage, range deletion and the danger zone.*
 
 ---
 
