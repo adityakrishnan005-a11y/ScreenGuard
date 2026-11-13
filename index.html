@@ -38,8 +38,9 @@
   "author": { "@type": "Person", "name": "Aditya Krishnan", "url": "https://github.com/adityakrishnan005-a11y" },
   "screenshot": [
     "https://adityakrishnan005-a11y.github.io/ScreenGuard/screenshots/dashboard.png",
-    "https://adityakrishnan005-a11y.github.io/ScreenGuard/screenshots/app-limit-lockout.png",
-    "https://adityakrishnan005-a11y.github.io/ScreenGuard/screenshots/screenshot-focus-mode.webp"
+    "https://adityakrishnan005-a11y.github.io/ScreenGuard/screenshots/app-limit-dialog.png",
+    "https://adityakrishnan005-a11y.github.io/ScreenGuard/screenshots/reports.png",
+    "https://adityakrishnan005-a11y.github.io/ScreenGuard/screenshots/focus-mode.png"
   ]
 }
 </script>
@@ -216,12 +217,59 @@
   .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:38px}
   .gallery figure{border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#fff;box-shadow:0 10px 26px rgba(11,29,34,.06);transition:transform .18s ease,box-shadow .18s ease}
   .gallery figure:hover{transform:translateY(-3px);box-shadow:0 22px 44px rgba(11,29,34,.13)}
-  .gallery img{aspect-ratio:1280/780;object-fit:cover;object-position:top}
+  .gallery figure a{display:block;background:#0b1e26}
+  .gallery img{aspect-ratio:1730/922;object-fit:contain;object-position:center}
   .gallery figcaption{font-size:12.5px;color:var(--muted);padding:9px 12px;border-top:1px solid var(--line)}
+  .gallery-more{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px dashed #c6dad6;border-radius:14px;background:rgba(255,255,255,.5);color:var(--muted);font-size:13px;text-align:center;padding:20px;transition:border-color .18s ease,background .18s ease}
+  .gallery-more b{color:var(--accent);font-size:14px;font-weight:700}
+  .gallery-more:hover{border-color:var(--accent);background:#fff}
 
-  /* install */
+  /* interactive demo */
+  .demo{margin-top:34px;border-radius:18px;border:1px solid #142b33;background:linear-gradient(180deg,#0b1e26,#07141a);box-shadow:0 40px 90px rgba(11,29,34,.26);overflow:hidden}
+  .demo-bar{display:flex;align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid rgba(148,197,210,.14)}
+  .demo-dot{width:9px;height:9px;border-radius:50%;background:#22434d}
+  .demo-title{margin-left:7px;font-size:12px;color:var(--dark-muted);letter-spacing:.02em}
+  .demo-hint{margin-left:auto;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#5eead4}
+  .demo-stage{position:relative;background:#0b1e26;line-height:0}
+  .demo-stage img{width:100%;height:auto;display:block}
+  .demo-hot{position:absolute;inset:0}
+  .hot{position:absolute;border:0;padding:0;background:transparent;border-radius:9px;cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+  .hot:hover,.hot:focus-visible{background:rgba(94,234,212,.16);box-shadow:inset 0 0 0 2px rgba(94,234,212,.7)}
+  .hot:focus-visible{outline:none}
+  .hot.debug{background:rgba(244,114,182,.25);box-shadow:inset 0 0 0 1px #f472b6}
+  .demo-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 14px;border-top:1px solid rgba(148,197,210,.14);font-size:12px;color:var(--dark-muted)}
+  .demo-foot b{color:var(--dark-ink);font-weight:600}
+  .demo-tabs{display:none;gap:6px;padding:10px 12px;border-top:1px solid rgba(148,197,210,.14);flex-wrap:wrap}
+  .demo-tabs button{font:inherit;font-size:12.5px;font-weight:600;color:var(--dark-muted);background:rgba(148,197,210,.08);border:1px solid transparent;border-radius:8px;padding:7px 12px;cursor:pointer}
+  .demo-tabs button[aria-pressed="true"]{background:linear-gradient(120deg,#67e8f9,#5eead4);color:#062026}
+  @media (max-width: 700px){
+    .demo-hot{display:none}
+    .demo-tabs{display:flex}
+  }
+  .demo-note{color:var(--muted);font-size:13px;margin-top:14px}
+
+  /* sample donut */
+  .sample{display:grid;grid-template-columns:260px 1fr;gap:34px;align-items:center;margin-top:30px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px;box-shadow:0 8px 24px rgba(11,29,34,.05)}
+  .sample svg{width:100%;height:auto;display:block}
+  .sample .seg{animation:seg-in .9s cubic-bezier(.4,0,.2,1) both}
+  @keyframes seg-in{from{stroke-dasharray:0 439.8}}
+  .sample h3{font-size:15.5px;letter-spacing:-.01em}
+  .sample p{color:var(--muted);font-size:13.8px;margin-top:6px;max-width:52ch}
+  .legend{list-style:none;display:grid;gap:7px;margin-top:16px;max-width:320px}
+  .legend li{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--muted)}
+  .legend .sw{width:10px;height:10px;border-radius:3px;flex:none}
+  .legend b{margin-left:auto;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .donut-center{font-family:-apple-system,"Segoe UI",sans-serif}
+  @media (max-width: 760px){
+    .sample{grid-template-columns:1fr;gap:22px;padding:20px}
+    .sample svg{max-width:200px;margin-inline:auto}
+    .demo-foot span:last-child{display:none}
+    .demo-note{display:none}
+  }
+  @media (prefers-reduced-motion: reduce){.sample .seg{animation:none}}
+
   .pkgs{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:40px;align-items:start}
-  .pkg{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:0 8px 24px rgba(11,29,34,.05)}
+  .pkg{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:0 8px 24px rgba(11,29,34,.05);min-width:0}
   .pkg h3{font-size:15.5px;letter-spacing:-.01em}
   .pkg .sub{color:var(--muted);font-size:13px;margin:2px 0 12px}
   .cmd{position:relative;margin-top:10px}
@@ -298,6 +346,9 @@
   }
   @media (max-width: 600px){
     .gallery,.settings-row,.foot-grid{grid-template-columns:1fr}
+    .cmd code{white-space:pre;overflow-wrap:normal}
+    .cmd .copy{position:static;display:block;margin:0 0 6px auto;padding:5px 10px}
+    .cmd pre{padding-right:14px}
     .flow-inner{flex-direction:column;gap:12px}
     .stage-tabs label{font-size:11px;padding:5px 8px}
     .stage-label{display:none}
@@ -320,6 +371,7 @@
     <nav class="nav" aria-label="Main">
       <a href="#features">How it works</a>
       <a href="#screenshots">Screenshots</a>
+      <a href="#demo">Demo</a>
       <a href="#install">Install</a>
       <a href="#docs">Docs</a>
       <a href="#faq">FAQ</a>
@@ -342,7 +394,7 @@
           <a class="btn primary" href="#install">Install for Linux →</a>
           <a class="btn" href="#features">See how it works ↓</a>
         </div>
-        <p class="meta">Free · GPL-3.0 · v1.1.2 · APT, Copr, Arch, openSUSE, Nix</p>
+        <p class="meta">Free · GPL-3.0 · APT, Copr, Arch, openSUSE, Nix</p>
         <div class="pills">
           <span class="pill"><span class="dot"></span>GNOME Wayland + X11</span>
           <span class="pill"><span class="dot"></span>All data local</span>
@@ -364,18 +416,18 @@
         </div>
         <div class="stage-panels">
           <figure class="p1">
-            <img src="screenshots/dashboard.png" alt="ScreenGuard dashboard with today's screen time, weekly chart and app share" width="1274" height="778" fetchpriority="high">
+            <img src="screenshots/dashboard.png" alt="ScreenGuard dashboard: 28 minutes against a 6-hour daily goal, weekly bars and app share" width="1730" height="922" fetchpriority="high">
           </figure>
           <figure class="p2">
-            <img src="screenshots/app-limit-lockout.png" alt="Lockout screen when a daily app limit is reached" width="1271" height="759" loading="lazy">
+            <img src="screenshots/app-limit-dialog.png" alt="Daily limit dialog with 15m, 30m, 45m, 1 hour and 2 hour presets" width="1730" height="922" loading="lazy">
           </figure>
           <figure class="p3">
-            <img src="screenshots/screenshot-focus-mode.webp" alt="Focus Mode timer and distraction app picker" width="1280" height="780" loading="lazy">
+            <img src="screenshots/focus-mode.png" alt="Focus Mode with Work time selected, a 25-minute timer and the app blocker grid" width="1730" height="922" loading="lazy">
           </figure>
         </div>
         <div class="stage-foot">
           <span>Screenshots from the running app</span>
-          <span>v1.1.2</span>
+          <span>Linux</span>
         </div>
       </div>
     </div>
@@ -434,7 +486,7 @@
         <div>
           <p class="viewer-label">Day view · Real app</p>
           <div class="frame">
-            <img src="screenshots/dashboard.png" alt="Dashboard: today's total, the week's bars, app share donut and most-used apps" width="1274" height="778" loading="lazy" decoding="async">
+            <img src="screenshots/dashboard.png" alt="Dashboard: today's ring against the daily goal, the week's bars, app share donut and most-used apps" width="1730" height="922" loading="lazy" decoding="async">
           </div>
           <div class="frame-cap">
             <span><b>See where your day can go.</b> Today, the last 30 days, and a per-app breakdown.</span>
@@ -461,9 +513,9 @@
       </div>
       <div>
         <div class="frame" style="border-color:rgba(148,197,210,.22)">
-          <img src="screenshots/app-limit-lockout.png" alt="Lockout screen with Add 15 minutes, Edit limit and Back to Dashboard" width="1271" height="759" loading="lazy" decoding="async">
+          <img src="screenshots/app-limit-dialog.png" alt="Daily limit dialog with presets from 15 minutes to 2 hours and a custom minutes field" width="1730" height="922" loading="lazy" decoding="async">
         </div>
-        <p class="frame-cap" style="color:var(--dark-muted)"><b style="color:var(--dark-ink)">The lockout at 100%.</b> One app, one budget, one honest moment.</p>
+        <p class="frame-cap" style="color:var(--dark-muted)"><b style="color:var(--dark-ink)">Setting the limit.</b> One app, one budget, one deliberate choice.</p>
       </div>
     </div>
   </section>
@@ -473,9 +525,9 @@
     <div class="wrap split">
       <div>
         <div class="frame">
-          <img src="screenshots/screenshot-focus-mode.webp" alt="Focus Mode with a 25-minute timer and a grid of apps to block" width="1280" height="780" loading="lazy" decoding="async">
+          <img src="screenshots/focus-mode.png" alt="Focus Mode: Work time card with a 25:00 timer, cycle and break settings, and a searchable app grid" width="1730" height="922" loading="lazy" decoding="async">
         </div>
-        <p class="frame-cap"><b>Focus Mode.</b> Timer, presets and the distraction app picker.</p>
+        <p class="frame-cap"><b>Focus Mode.</b> Timer, cycles and the app picker.</p>
       </div>
       <div>
         <p class="kicker">Focus Mode</p>
@@ -495,19 +547,19 @@
       <h2 class="h2" style="font-size:clamp(1.6rem,2.6vw,2.1rem)">Every setting visible.<span class="serif">Every byte local.</span></h2>
       <div class="settings-row">
         <figure>
-          <div class="frame"><img src="screenshots/screenshot-general-settings.webp" alt="Settings — General" width="1280" height="780" loading="lazy" decoding="async"></div>
+          <div class="frame"><img src="screenshots/settings-general.png" alt="Settings — General: theme, notifications, sounds" width="1730" height="922" loading="lazy" decoding="async"></div>
           <figcaption class="frame-cap" style="margin-top:8px;font-size:12px">Settings → General</figcaption>
         </figure>
         <figure>
-          <div class="frame"><img src="screenshots/screenshot-limits-pomodoro.webp" alt="Settings — Limits &amp; Pomodoro" width="1280" height="780" loading="lazy" decoding="async"></div>
+          <div class="frame"><img src="screenshots/settings-limits.png" alt="Settings — Limits &amp; Pomodoro: pomodoro loop and blocked-app handling" width="1730" height="922" loading="lazy" decoding="async"></div>
           <figcaption class="frame-cap" style="margin-top:8px;font-size:12px">Settings → Limits &amp; Pomodoro</figcaption>
         </figure>
         <figure>
-          <div class="frame"><img src="screenshots/screenshot-data-settings.webp" alt="Settings — Data" width="1280" height="780" loading="lazy" decoding="async"></div>
+          <div class="frame"><img src="screenshots/settings-data.png" alt="Settings — Data: stored usage, delete ranges and danger zone" width="1730" height="922" loading="lazy" decoding="async"></div>
           <figcaption class="frame-cap" style="margin-top:8px;font-size:12px">Settings → Data</figcaption>
         </figure>
       </div>
-      <p class="note">Theme, notifications, sounds, update channel, diagnostics and data controls in one place. Your database lives at <code class="inline-code">~/.local/share/screenguard/usage.db</code> (SQLite, WAL mode). Window transparency in these screenshots comes from the Blur My Shell GNOME extension, not from ScreenGuard.</p>
+      <p class="note">Theme, notifications, sounds, update channel, diagnostics and data controls in one place. Your database lives at <code class="inline-code">~/.local/share/screenguard/usage.db</code> (SQLite, WAL mode) and you can delete any date range from the app.</p>
     </div>
   </section>
 
@@ -516,32 +568,87 @@
     <div class="wrap">
       <p class="kicker">Screenshots</p>
       <h2 class="h2">Every screen.<span class="serif">No surprises.</span></h2>
-      <p class="lead" style="margin-top:18px">Click any image to open it full size. More are in the repository under <code class="inline-code">docs/assets</code>.</p>
+      <p class="lead" style="margin-top:18px">Click any image to open it full size.</p>
       <div class="gallery">
         <figure>
-          <a href="screenshots/dashboard.png"><img src="screenshots/dashboard.png" alt="Dashboard" width="1274" height="778" loading="lazy" decoding="async"></a>
-          <figcaption>Dashboard — daily overview and 30-day totals</figcaption>
+          <a href="screenshots/dashboard.png"><img src="screenshots/dashboard.png" alt="Dashboard" width="1730" height="922" loading="lazy" decoding="async"></a>
+          <figcaption>Today — ring, goal and app share</figcaption>
         </figure>
         <figure>
-          <a href="screenshots/app-limit-lockout.png"><img src="screenshots/app-limit-lockout.png" alt="App limit lockout" width="1271" height="759" loading="lazy" decoding="async"></a>
-          <figcaption>Lockout when a daily limit is reached</figcaption>
+          <a href="screenshots/reports.png"><img src="screenshots/reports.png" alt="Reports" width="1730" height="922" loading="lazy" decoding="async"></a>
+          <figcaption>Reports — 30-day trends and goal days</figcaption>
         </figure>
         <figure>
-          <a href="screenshots/screenshot-focus-mode.webp"><img src="screenshots/screenshot-focus-mode.webp" alt="Focus Mode" width="1280" height="780" loading="lazy" decoding="async"></a>
-          <figcaption>Focus Mode with the distraction app picker</figcaption>
+          <a href="screenshots/app-detail.png"><img src="screenshots/app-detail.png" alt="Per-app detail page" width="1730" height="922" loading="lazy" decoding="async"></a>
+          <figcaption>Per-app page — 7-day usage and limit</figcaption>
         </figure>
         <figure>
-          <a href="screenshots/screenshot-general-settings.webp"><img src="screenshots/screenshot-general-settings.webp" alt="Settings — General" width="1280" height="780" loading="lazy" decoding="async"></a>
-          <figcaption>Settings → General</figcaption>
+          <a href="screenshots/app-limit-dialog.png"><img src="screenshots/app-limit-dialog.png" alt="Daily limit dialog" width="1730" height="922" loading="lazy" decoding="async"></a>
+          <figcaption>Setting a daily limit — presets or custom</figcaption>
         </figure>
         <figure>
-          <a href="screenshots/screenshot-limits-pomodoro.webp"><img src="screenshots/screenshot-limits-pomodoro.webp" alt="Settings — Limits &amp; Pomodoro" width="1280" height="780" loading="lazy" decoding="async"></a>
-          <figcaption>Settings → Limits &amp; Pomodoro</figcaption>
+          <a href="screenshots/focus-mode.png"><img src="screenshots/focus-mode.png" alt="Focus Mode" width="1730" height="922" loading="lazy" decoding="async"></a>
+          <figcaption>Focus Mode — Work time and the app grid</figcaption>
         </figure>
-        <figure>
-          <a href="screenshots/screenshot-data-settings.webp"><img src="screenshots/screenshot-data-settings.webp" alt="Settings — Data" width="1280" height="780" loading="lazy" decoding="async"></a>
-          <figcaption>Settings → Data</figcaption>
-        </figure>
+        <a class="gallery-more" href="https://github.com/adityakrishnan005-a11y/ScreenGuard/tree/main/docs/assets">
+          <span>More screenshots</span>
+          <b>docs/assets →</b>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive demo -->
+  <section class="paper section" id="demo">
+    <div class="wrap">
+      <p class="kicker">Try it</p>
+      <h2 class="h2">Click around.<span class="serif">It's the real app, screen by screen.</span></h2>
+      <p class="lead" style="margin-top:18px">These are captures of the running app, wired together. Use the sidebar the way you would in ScreenGuard — open an app, set its limit, then walk through Settings.</p>
+
+      <div class="demo">
+        <div class="demo-bar">
+          <span class="demo-dot"></span><span class="demo-dot"></span><span class="demo-dot"></span>
+          <span class="demo-title">ScreenGuard</span>
+          <span class="demo-hint">Clickable</span>
+        </div>
+        <div class="demo-stage">
+          <img id="demo-img" src="screenshots/dashboard.png" alt="ScreenGuard dashboard" width="1730" height="922" decoding="async">
+          <div class="demo-hot" id="demo-hot"></div>
+        </div>
+        <div class="demo-tabs" id="demo-tabs"></div>
+        <div class="demo-foot">
+          <span>Now showing <b id="demo-label">Today</b></span>
+          <span>Click the sidebar to navigate</span>
+        </div>
+      </div>
+      <p class="demo-note">Tip: on Today, click the LibreWolf row to open its per-app page; from there, “Set limit” opens the daily limit dialog.</p>
+
+      <div class="sample">
+        <svg viewBox="0 0 200 200" role="img" aria-label="App Share donut chart with sample data">
+          <circle cx="100" cy="100" r="70" fill="none" stroke="#e9f1ef" stroke-width="26"></circle>
+          <g transform="rotate(-90 100 100)" fill="none" stroke-width="26">
+            <circle class="seg" cx="100" cy="100" r="70" stroke="#22d3ee" stroke-dasharray="233.1 439.8" stroke-dashoffset="0" style="animation-delay:0s"></circle>
+            <circle class="seg" cx="100" cy="100" r="70" stroke="#a78bfa" stroke-dasharray="96.8 439.8" stroke-dashoffset="-233.1" style="animation-delay:.12s"></circle>
+            <circle class="seg" cx="100" cy="100" r="70" stroke="#4ade80" stroke-dasharray="88 439.8" stroke-dashoffset="-329.9" style="animation-delay:.24s"></circle>
+            <circle class="seg" cx="100" cy="100" r="70" stroke="#fbbf24" stroke-dasharray="13.2 439.8" stroke-dashoffset="-417.9" style="animation-delay:.36s"></circle>
+            <circle class="seg" cx="100" cy="100" r="70" stroke="#f472b6" stroke-dasharray="8.8 439.8" stroke-dashoffset="-431.1" style="animation-delay:.48s"></circle>
+          </g>
+          <g class="donut-center" text-anchor="middle">
+            <text x="100" y="98" font-size="26" font-weight="700" fill="#0b1d22">28m</text>
+            <text x="100" y="116" font-size="9.5" fill="#546a70">of 6h goal</text>
+          </g>
+        </svg>
+        <div>
+          <h3>App Share — sample data</h3>
+          <p>This is the same breakdown the Today screen draws, rendered here as live SVG instead of a picture. Change the numbers in the app and the real donut moves the same way.</p>
+          <ul class="legend">
+            <li><span class="sw" style="background:#22d3ee"></span>LibreWolf <b>53%</b></li>
+            <li><span class="sw" style="background:#a78bfa"></span>Personal_plan <b>22%</b></li>
+            <li><span class="sw" style="background:#4ade80"></span>OpenCode <b>20%</b></li>
+            <li><span class="sw" style="background:#fbbf24"></span>Settings <b>3%</b></li>
+            <li><span class="sw" style="background:#f472b6"></span>Other <b>2%</b></li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
@@ -795,6 +902,116 @@ document.querySelectorAll('.cmd').forEach(function (box) {
     }).catch(function () {});
   });
 });
+
+(function () {
+  var stage = document.getElementById('demo-img');
+  var hot = document.getElementById('demo-hot');
+  var label = document.getElementById('demo-label');
+  if (!stage || !hot || !label) return;
+
+  var debug = /[?&]debug=1/.test(location.search);
+
+  var SIDEBAR = [
+    { to: 'today',    x: 0.3,  y: 13.1, w: 11.9, h: 4.8, name: 'Today' },
+    { to: 'focus',    x: 0.3,  y: 17.9, w: 11.9, h: 4.8, name: 'Focus' },
+    { to: 'reports',  x: 0.3,  y: 22.7, w: 11.9, h: 4.8, name: 'Reports' },
+    { to: 'settings', x: 0.3,  y: 27.5, w: 11.9, h: 4.8, name: 'Settings' }
+  ];
+  var SUBSETTINGS = [
+    { to: 'settings',        x: 12.6, y: 8.2,  w: 8.2, h: 5.4, name: 'General' },
+    { to: 'settings-limits', x: 12.6, y: 15.1, w: 8.2, h: 8, name: 'Limits & Pomodoro' },
+    { to: 'settings-data',   x: 12.6, y: 38.9, w: 8.2, h: 6.1, name: 'Data' }
+  ];
+
+  var SCREENS = {
+    'today': {
+      src: 'screenshots/dashboard.png', name: 'Today', alt: 'ScreenGuard dashboard',
+      hot: SIDEBAR.concat([{ to: 'app-detail', x: 12, y: 93, w: 80, h: 6.4, name: 'Open LibreWolf details' }])
+    },
+    'focus': { src: 'screenshots/focus-mode.png', name: 'Focus', alt: 'Focus Mode', hot: SIDEBAR },
+    'reports': { src: 'screenshots/reports.png', name: 'Reports', alt: 'Reports', hot: SIDEBAR },
+    'settings': {
+      src: 'screenshots/settings-general.png', name: 'Settings · General', alt: 'Settings, General tab',
+      hot: SIDEBAR.concat(SUBSETTINGS)
+    },
+    'settings-limits': {
+      src: 'screenshots/settings-limits.png', name: 'Settings · Limits & Pomodoro', alt: 'Settings, Limits and Pomodoro tab',
+      hot: SIDEBAR.concat(SUBSETTINGS)
+    },
+    'settings-data': {
+      src: 'screenshots/settings-data.png', name: 'Settings · Data', alt: 'Settings, Data tab',
+      hot: SIDEBAR.concat(SUBSETTINGS)
+    },
+    'app-detail': {
+      src: 'screenshots/app-detail.png', name: 'LibreWolf', alt: 'Per-app page for LibreWolf',
+      hot: [
+        { to: 'today', x: 1.1, y: 2.8, w: 3.6, h: 5.6, name: 'Back to Today' },
+        { to: 'dialog', x: 75.2, y: 34.8, w: 11, h: 5.2, name: 'Set limit' }
+      ]
+    },
+    'dialog': {
+      src: 'screenshots/app-limit-dialog.png', name: 'Daily limit', alt: 'Daily limit dialog',
+      hot: [
+        { to: 'app-detail', x: 59.2, y: 66.2, w: 6, h: 4.8, name: 'Cancel' },
+        { to: 'app-detail', x: 64.3, y: 64.8, w: 9.2, h: 5.8, name: 'Save limit' }
+      ]
+    }
+  };
+
+  function render(key) {
+    var s = SCREENS[key] || SCREENS['today'];
+    stage.src = s.src;
+    stage.alt = s.alt;
+    label.textContent = s.name;
+    hot.innerHTML = '';
+    s.hot.forEach(function (h) {
+      if (!SCREENS[h.to]) return;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hot' + (debug ? ' debug' : '');
+      b.style.left = h.x + '%';
+      b.style.top = h.y + '%';
+      b.style.width = h.w + '%';
+      b.style.height = h.h + '%';
+      b.setAttribute('aria-label', h.name);
+      b.title = h.name;
+      b.addEventListener('click', function () { render(h.to); });
+      hot.appendChild(b);
+    });
+    renderTabs(key);
+  }
+
+  var TABS = [['today', 'Today'], ['focus', 'Focus'], ['reports', 'Reports'], ['settings', 'Settings']];
+  var tabsEl = document.getElementById('demo-tabs');
+
+  function sectionOf(key) {
+    if (key.indexOf('settings') === 0) return 'settings';
+    if (key === 'app-detail' || key === 'dialog') return 'today';
+    return key;
+  }
+
+  function renderTabs(key) {
+    if (!tabsEl) return;
+    var cur = sectionOf(key);
+    tabsEl.innerHTML = '';
+    TABS.forEach(function (t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = t[1];
+      b.setAttribute('aria-pressed', t[0] === cur ? 'true' : 'false');
+      b.addEventListener('click', function () { render(t[0]); });
+      tabsEl.appendChild(b);
+    });
+  }
+
+  Object.keys(SCREENS).forEach(function (k) {
+    var i = new Image();
+    i.src = SCREENS[k].src;
+  });
+  window.__demoShow = render;
+  var start = new URLSearchParams(location.search).get('screen');
+  render(SCREENS[start] ? start : 'today');
+})();
 </script>
 </body>
 </html>
