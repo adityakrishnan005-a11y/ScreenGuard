@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/services/app_resolver.dart';
 import 'package:screenguard/services/crash_reporter.dart';
 import 'package:screenguard/services/daemon_service.dart';
@@ -27,12 +27,13 @@ void main(List<String> args) {
   runZonedGuarded(() {
     WidgetsFlutterBinding.ensureInitialized();
 
-    final db = DatabaseService();
-    db.init();
+    // No database handle here: every read and write leaves through the native
+    // broker. The API opens SQLite itself only if no broker is running.
+    final api = ScreenGuardApi.forGui();
     final resolver = AppResolver();
     resolver.init();
     final daemonService = DaemonService();
-    final themeService = ThemeService(db);
+    final themeService = ThemeService(api.policy);
 
     String? timesUpApp;
     String? focusBlockApp;
@@ -50,7 +51,7 @@ void main(List<String> args) {
     runApp(
       MultiProvider(
         providers: [
-          Provider<DatabaseService>.value(value: db),
+          Provider<ScreenGuardApi>.value(value: api),
           Provider<CrashReporter>.value(value: crashReporter),
           ChangeNotifierProvider<DaemonService>.value(value: daemonService),
           ChangeNotifierProvider<ThemeService>.value(value: themeService),

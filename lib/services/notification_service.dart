@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/policy_api.dart';
 import 'package:screenguard/services/sound_service.dart';
 
 /// Centralized notification service for ScreenGuard.
@@ -47,7 +47,7 @@ class NotificationService {
   /// Sends a desktop notification and plays the associated audio cue
   /// according to user preferences stored in SQLite.
   static Future<void> show({
-    required DatabaseService db,
+    required PolicyApi policy,
     required String eventKey,
     required String title,
     required String body,
@@ -56,8 +56,8 @@ class NotificationService {
     int timeoutMs = 5000,
     bool playSound = true,
   }) async {
-    final notifyGlobal = db.isNotificationsGloballyEnabled();
-    final notifyEvent = db.isEventNotificationEnabled(eventKey);
+    final notifyGlobal = policy.isNotificationsGloballyEnabled();
+    final notifyEvent = policy.isEventNotificationEnabled(eventKey);
 
     // 1. Desktop Notification
     if (notifyGlobal && notifyEvent) {
@@ -120,11 +120,11 @@ class NotificationService {
 
     // 2. Sound Cue
     if (playSound &&
-        db.isSoundGloballyEnabled() &&
-        db.isEventSoundEnabled(eventKey)) {
+        policy.isSoundGloballyEnabled() &&
+        policy.isEventSoundEnabled(eventKey)) {
       try {
-        final soundTheme = db.getSoundTheme();
-        final customPath = db.getCustomSoundPath();
+        final soundTheme = policy.getSoundTheme();
+        final customPath = policy.getCustomSoundPath();
         SoundService.playSound(soundId: soundTheme, customPath: customPath);
       } catch (e) {
         stderr.writeln('[notify] error playing sound: $e');

@@ -35,6 +35,7 @@ Source10:          https://raw.githubusercontent.com/adityakrishnan005-a11y/Scre
 Source11:          https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v%{version}/LICENSE
 Source12:          https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v%{version}/README.md
 Source13:          https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v%{version}/packaging/org.screenguard.ScreenGuard.appdata.xml
+Source14:          https://raw.githubusercontent.com/adityakrishnan005-a11y/ScreenGuard/v%{version}/linux/screenguard-broker.service
 
 ExclusiveArch:     x86_64
 
@@ -78,7 +79,7 @@ cp -a bundle/. %{buildroot}/opt/screenguard/
 
 # Symlinks into PATH
 install -d %{buildroot}%{_bindir}
-for bin in screenguard screenguard-daemon screenguard-watchdog screenguard-notify screenguard-killer; do
+for bin in screenguard screenguard-daemon screenguard-watchdog screenguard-notify screenguard-killer screenguard-broker cinnamon_focus; do
   ln -sf /opt/screenguard/$bin %{buildroot}%{_bindir}/$bin
 done
 
@@ -87,6 +88,7 @@ install -Dpm0644 %{SOURCE4} %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/s
 
 # systemd user service and preset
 install -Dpm0644 %{SOURCE1} %{buildroot}%{_userunitdir}/screenguard.service
+install -Dpm0644 %{SOURCE14} %{buildroot}%{_userunitdir}/screenguard-broker.service
 install -Dpm0644 %{SOURCE9} %{buildroot}%{_userpresetdir}/50-screenguard.preset
 
 # Desktop launcher and autostart
@@ -129,7 +131,10 @@ install -Dpm0644 %{SOURCE12} README.md
 %{_bindir}/screenguard-watchdog
 %{_bindir}/screenguard-notify
 %{_bindir}/screenguard-killer
+%{_bindir}/screenguard-broker
+%{_bindir}/cinnamon_focus
 %{_userunitdir}/screenguard.service
+%{_userunitdir}/screenguard-broker.service
 %{_userpresetdir}/50-screenguard.preset
 %{_datadir}/applications/screenguard.desktop
 %{_datadir}/metainfo/org.screenguard.ScreenGuard.appdata.xml
@@ -147,10 +152,12 @@ install -Dpm0644 %{SOURCE12} README.md
 
 %post
 %systemd_user_post screenguard.service
+%systemd_user_post screenguard-broker.service
 %{_datadir}/screenguard/enable_fedora_a11y.sh || :
 
 %preun
 %systemd_user_preun screenguard.service
+%systemd_user_preun screenguard-broker.service
 
 %changelog
 * Fri Nov 6 2026 Aditya Krishnan <aditya.krishnan005@gmail.com> - 1.1.2-1

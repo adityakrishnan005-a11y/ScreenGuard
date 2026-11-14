@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/daemon_service.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/screens/settings_screen.dart';
 
 class DaemonStatusBanner extends StatelessWidget {
@@ -96,10 +96,10 @@ class DaemonStatusBanner extends StatelessWidget {
                 icon: const Icon(Icons.settings_outlined, color: Colors.white70, size: 18),
                 visualDensity: VisualDensity.compact,
                 onPressed: () {
-                  final db = Provider.of<DatabaseService>(context, listen: false);
+                  final api = Provider.of<ScreenGuardApi>(context, listen: false);
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (ctx) => SettingsScreen(db: db, initialTabIndex: 2),
+                      builder: (ctx) => SettingsScreen(api: api, initialTabIndex: 2),
                     ),
                   );
                 },

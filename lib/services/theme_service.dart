@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/policy_api.dart';
 
 class ThemeService extends ChangeNotifier {
-  final DatabaseService _db;
+  final PolicyApi _policy;
   late ThemeMode _themeMode;
 
-  ThemeService(this._db) {
+  ThemeService(this._policy) {
     _loadTheme();
   }
 
@@ -23,7 +23,7 @@ class ThemeService extends ChangeNotifier {
   }
 
   void _loadTheme() {
-    final mode = _db.getSetting('app_theme_mode', defaultValue: 'system');
+    final mode = _policy.getSetting('app_theme_mode', defaultValue: 'system');
     switch (mode) {
       case 'light':
         _themeMode = ThemeMode.light;
@@ -39,7 +39,7 @@ class ThemeService extends ChangeNotifier {
   }
 
   void setThemeMode(String mode) {
-    _db.setSetting('app_theme_mode', mode);
+    _policy.setSetting('app_theme_mode', mode);
     switch (mode) {
       case 'light':
         _themeMode = ThemeMode.light;

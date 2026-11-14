@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:screenguard/services/daemon_service.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 
 class DaemonPromptDialog extends StatelessWidget {
   final DaemonService daemonService;
-  final DatabaseService db;
+  final ScreenGuardApi api;
 
   const DaemonPromptDialog({
     super.key,
     required this.daemonService,
-    required this.db,
+    required this.api,
   });
 
   static Future<void> showIfNeeded(
     BuildContext context,
     DaemonService daemonService,
-    DatabaseService db,
+    ScreenGuardApi api,
   ) async {
     // Check if user has already made an initial choice or if daemon is running
-    final choice = db.getSetting('daemon_initial_choice', defaultValue: '');
+    final choice = api.policy.getSetting('daemon_initial_choice', defaultValue: '');
     if (choice.isNotEmpty || daemonService.isRunning) {
       return;
     }
@@ -32,7 +32,7 @@ class DaemonPromptDialog extends StatelessWidget {
       barrierDismissible: false,
       builder: (ctx) => DaemonPromptDialog(
         daemonService: daemonService,
-        db: db,
+        api: api,
       ),
     );
   }
@@ -97,7 +97,7 @@ class DaemonPromptDialog extends StatelessWidget {
               subtitle: 'Starts automatically whenever your PC turns on and stays active in background.',
               isPrimary: true,
               onTap: () async {
-                db.setSetting('daemon_initial_choice', 'autostart');
+                api.policy.setSetting('daemon_initial_choice', 'autostart');
                 Navigator.of(context).pop();
                 await daemonService.startDaemon(enableAutostart: true);
               },
@@ -111,7 +111,7 @@ class DaemonPromptDialog extends StatelessWidget {
               title: 'Start for Now',
               subtitle: 'Runs in background until your PC shuts down. Won\'t auto-start next boot.',
               onTap: () async {
-                db.setSetting('daemon_initial_choice', 'session_only');
+                api.policy.setSetting('daemon_initial_choice', 'session_only');
                 Navigator.of(context).pop();
                 await daemonService.startDaemon(enableAutostart: false);
               },
@@ -125,7 +125,7 @@ class DaemonPromptDialog extends StatelessWidget {
               title: 'Leave to Start Manually',
               subtitle: 'Do not start right now. You can start it anytime from the top bar or Settings.',
               onTap: () {
-                db.setSetting('daemon_initial_choice', 'manual');
+                api.policy.setSetting('daemon_initial_choice', 'manual');
                 Navigator.of(context).pop();
               },
             ),

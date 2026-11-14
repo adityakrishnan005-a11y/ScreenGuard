@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/utils/format.dart';
 
 class DailyGoalDialog extends StatefulWidget {
@@ -164,8 +164,8 @@ class _DailyGoalDialogState extends State<DailyGoalDialog> {
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             onPressed: () {
-              final db = Provider.of<DatabaseService>(context, listen: false);
-              db.setDailyGoalMs(0);
+              final api = Provider.of<ScreenGuardApi>(context, listen: false);
+              api.policy.setDailyGoalMs(0);
               Navigator.of(context).pop(true);
             },
             child: const Text('Remove Goal'),
@@ -176,8 +176,8 @@ class _DailyGoalDialogState extends State<DailyGoalDialog> {
         ),
         ElevatedButton(
           onPressed: () {
-            final db = Provider.of<DatabaseService>(context, listen: false);
-            db.setDailyGoalMs(_selectedMs);
+            final api = Provider.of<ScreenGuardApi>(context, listen: false);
+            api.policy.setDailyGoalMs(_selectedMs);
             Navigator.of(context).pop(true);
           },
           child: const Text('Save Goal'),

@@ -29,11 +29,42 @@ log() { echo "[screenguard-migrate] $*" >&2; }
 
 # Only signal PIDs whose live executable really is one of ours — kills the
 # pkill-matches-my-own-command-line foot-gun.
-_is_ours() { # $1: pid -> true when /proc/<pid>/exe basename is screenguard*
-  local exe base
+_is_ours() { # $1: pid -> true when /proc/<pid>/exe basename is screenguard* or digiwelld*
+  local exe base rt
   exe="$(readlink -f "/proc/$1/exe" 2>/dev/null)" || return 1
   base="${exe##*/}"
-  case "$base" in screenguard*) return 0 ;; *) return 1 ;; esac
+  case "$base" in screenguard*|digiwelld*) ;; *) return 1 ;; esac
+  # Do not cross session boundaries. A process running under a different
+  # XDG_RUNTIME_DIR belongs to another login, sandbox or test install; it
+  # cannot hold this session's daemon.lock or digiwelld.lock, so killing it
+  # would be trespassing (seen while testing installs in an isolated HOME).
+  # Unknown/missing value keeps the historical behaviour: treat it as ours.
+  rt="$(cat "/proc/$1/environ" 2>/dev/null | tr '\0' '\n' \
+    | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -n 1)"
+  if [ -n "$rt" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ "$rt" != "$XDG_RUNTIME_DIR" ]; then
+    return 1
+  fi
+  return 0
+}
+
+# Echo pids whose resolved executable basename is exactly one of the names
+# given, without pgrep -f (which can match the caller's own command line).
+sg_pids() { # $@ = basenames
+  local d pid exe base want
+  for d in /proc/[0-9]*; do
+    pid="${d#/proc/}"
+    case "$pid" in '' | *[!0-9]*) continue ;; esac
+    [ "$pid" = "$$" ] && continue
+    exe="$(readlink -f "$d/exe" 2>/dev/null)" || continue
+    base="${exe##*/}"
+    for want in "$@"; do
+      if [ "$base" = "$want" ]; then
+        echo "$pid"
+        break
+      fi
+    done
+  done
+  return 0
 }
 
 _kill_one() { # $1 signal, $2 pid
@@ -44,20 +75,16 @@ _kill_one() { # $1 signal, $2 pid
   kill -"$1" "$2" 2>/dev/null || true
 }
 
-# Stop watchdogs first (they would restart the daemon under us), then
+# Stop supervisors first (they would restart the daemon under us), then
 # daemons, then GUIs. TERM with a grace window, then KILL the leftovers.
+# digiwelld is listed before the daemon so a TERM round can shut it down
+# gracefully, which also stops its session worker.
 sg_stop_all() {
   local round sig p
   for round in 1 2; do
     sig=TERM
     [ "$round" = 2 ] && sig=KILL
-    for p in $(pgrep -f 'screenguard-watchdog' 2>/dev/null || true); do
-      _is_ours "$p" && _kill_one "$sig" "$p"
-    done
-    for p in $(pgrep -f 'screenguard-daemon' 2>/dev/null || true); do
-      _is_ours "$p" && _kill_one "$sig" "$p"
-    done
-    for p in $(pgrep -x screenguard 2>/dev/null || true); do
+    for p in $(sg_pids digiwelld digiwelld-session digiwelld-usage digiwelld-policy digiwelld-store screenguard-broker screenguard-watchdog screenguard-daemon screenguard); do
       _is_ours "$p" && _kill_one "$sig" "$p"
     done
     [ "$DRY" = 1 ] || sleep 2
@@ -82,14 +109,14 @@ sg_systemd_stop() {
       else
         sudo -u "$uname" XDG_RUNTIME_DIR="$udir" \
           DBUS_SESSION_BUS_ADDRESS="unix:path=$udir/bus" \
-          systemctl --user stop screenguard.service 2>/dev/null || true
+          systemctl --user stop digiwelld.service screenguard-broker.service screenguard.service 2>/dev/null || true
         sudo -u "$uname" XDG_RUNTIME_DIR="$udir" \
           DBUS_SESSION_BUS_ADDRESS="unix:path=$udir/bus" \
           systemctl --user daemon-reload 2>/dev/null || true
       fi
     done
   else
-    systemctl --user stop screenguard.service 2>/dev/null || true
+    systemctl --user stop digiwelld.service screenguard-broker.service screenguard.service 2>/dev/null || true
     systemctl --user daemon-reload 2>/dev/null || true
   fi
 }
@@ -127,10 +154,20 @@ sg_adopt_package() {
     else
       rm -rf "$h/.local/opt/screenguard" 2>/dev/null
       for f in screenguard screenguard-daemon screenguard-watchdog \
-        screenguard-notify screenguard-killer; do
+        screenguard-notify screenguard-killer screenguard-broker \
+        digiwelld digiwelld-session digiwelld-usage digiwelld-policy \
+        digiwelld-store; do
         rm -f "$h/.local/bin/$f" 2>/dev/null
       done
       rm -f "$h/.config/systemd/user/screenguard.service" 2>/dev/null
+      rm -f "$h/.config/systemd/user/digiwelld.service" 2>/dev/null
+      rm -f "$h/.config/systemd/user/screenguard-broker.service" 2>/dev/null
+      # Wants-symlinks left in a user's units dir would keep pointing systemd
+      # at the removed shadow after daemon-reload.
+      rm -f "$h/.config/systemd/user/default.target.wants/digiwelld.service" 2>/dev/null
+      rm -f "$h/.config/systemd/user/graphical-session.target.wants/digiwelld.service" 2>/dev/null
+      rm -f "$h/.config/systemd/user/default.target.wants/screenguard-broker.service" 2>/dev/null
+      rm -f "$h/.config/systemd/user/graphical-session.target.wants/screenguard-broker.service" 2>/dev/null
       rm -f "$h/.config/autostart/screenguard-daemon.desktop" 2>/dev/null
       rm -f "$h/.local/share/applications/screenguard.desktop" 2>/dev/null
       rm -rf "$h/.cache/screenguard/update" 2>/dev/null

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:screenguard/screens/dashboard.dart';
 import 'package:screenguard/screens/focus_screen.dart';
 import 'package:screenguard/services/daemon_service.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/services/feedback_service.dart';
 import 'package:screenguard/services/update_checker.dart';
 import 'package:screenguard/widgets/daemon_prompt_dialog.dart';
@@ -30,16 +30,16 @@ class _MainShellState extends State<MainShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final daemonService = Provider.of<DaemonService>(context, listen: false);
-      final db = Provider.of<DatabaseService>(context, listen: false);
+      final api = Provider.of<ScreenGuardApi>(context, listen: false);
 
       // The daemon setup prompt comes first — two dialogs must never
       // stack on top of each other.
-      await DaemonPromptDialog.showIfNeeded(context, daemonService, db);
+      await DaemonPromptDialog.showIfNeeded(context, daemonService, api);
       if (!mounted) return;
 
       // Post-update banner: if the binary changed since the last run (any
       // install medium — rpm/deb/tarball/manual), announce it once.
-      final updatedTo = UpdateChecker.updateNoticeOnStartup(db);
+      final updatedTo = UpdateChecker.updateNoticeOnStartup(api.policy);
       if (updatedTo != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -52,10 +52,10 @@ class _MainShellState extends State<MainShell> {
       // Feedback request from the maintainer, if one is waiting.
       if (!daemonService.isRunning) {
         // No daemon to look it up for us — fetch it here (once a day).
-        await FeedbackService(db: db).checkIfDue();
+        await FeedbackService(policy: api.policy).checkIfDue();
         if (!mounted) return;
       }
-      await FeedbackDialog.showIfNeeded(context, db);
+      await FeedbackDialog.showIfNeeded(context, api.policy);
     });
   }
 

@@ -93,4 +93,12 @@ class X11Backend implements WindowBackend {
     }
     return false;
   }
+
+  /// X11 has no single portable "deactivate" call, so ask the window manager
+  /// to cycle focus. `--clearmodifiers` avoids a stuck Alt if the user was
+  /// holding it.
+  @override
+  Future<bool> switchAwayFromActiveWindow() async {
+    return await _runExitCode('xdotool', ['key', '--clearmodifiers', 'alt+Tab']);
+  }
 }

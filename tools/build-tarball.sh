@@ -27,20 +27,57 @@ OUT="$REPO_ROOT/dist/screenguard-${VERSION}-x86_64.tar.gz"
 need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: missing required tool: $1" >&2; exit 1; }; }
 need flutter; need dart; need tar
 
+CC_BIN="cc"; command -v cc >/dev/null 2>&1 || CC_BIN="gcc"
+
 echo "[tarball] building Flutter release bundle..."
 (cd "$REPO_ROOT" && flutter build linux --release)
 
 echo "[tarball] compiling background daemon..."
 dart compile exe "$REPO_ROOT/bin/daemon.dart" -o "$BUNDLE/screenguard-daemon"
 
-echo "[tarball] compiling C watchdog supervisor..."
-if command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1; then
-  CC_BIN="cc"; command -v cc >/dev/null 2>&1 || CC_BIN="gcc"
-  $CC_BIN -O2 -Wall -o "$BUNDLE/screenguard-watchdog" "$REPO_ROOT/src/watchdog.c" \
-    && echo "[tarball] watchdog compiled ($(du -h "$BUNDLE/screenguard-watchdog" | cut -f1))" \
-    || echo "[tarball] WARNING: watchdog build failed — continuing without it"
+echo "[tarball] compiling digiwelld (front door + supervisor)..."
+if command -v "$CC_BIN" >/dev/null 2>&1; then
+  $CC_BIN -O2 -Wall -Wextra -o "$BUNDLE/digiwelld" "$REPO_ROOT/src/digiwelld.c" \
+    && echo "[tarball] digiwelld compiled ($(du -h "$BUNDLE/digiwelld" | cut -f1))" \
+    || echo "[tarball] WARNING: digiwelld build failed — continuing without it"
 else
-  echo "[tarball] WARNING: no C compiler — skipping watchdog (install gcc or clang)"
+  echo "[tarball] WARNING: no C compiler — skipping digiwelld (install gcc or clang)"
+fi
+
+echo "[tarball] compiling digiwelld session worker..."
+if command -v "$CC_BIN" >/dev/null 2>&1; then
+  $CC_BIN -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/digiwelld-session" "$REPO_ROOT/src/session.c" \
+    && echo "[tarball] session worker compiled ($(du -h "$BUNDLE/digiwelld-session" | cut -f1))" \
+    || echo "[tarball] WARNING: session worker build failed — continuing without it"
+else
+  echo "[tarball] WARNING: no C compiler — skipping digiwelld-session (install gcc or clang)"
+fi
+
+echo "[tarball] compiling digiwelld usage worker..."
+if command -v "$CC_BIN" >/dev/null 2>&1; then
+  $CC_BIN -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/digiwelld-usage" "$REPO_ROOT/src/usage.c" -lsqlite3 \
+    && echo "[tarball] usage worker compiled ($(du -h "$BUNDLE/digiwelld-usage" | cut -f1))" \
+    || echo "[tarball] WARNING: usage worker build failed — continuing without it"
+else
+  echo "[tarball] WARNING: no C compiler — skipping digiwelld-usage (install gcc or clang)"
+fi
+
+echo "[tarball] compiling digiwelld policy worker..."
+if command -v "$CC_BIN" >/dev/null 2>&1; then
+  $CC_BIN -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/digiwelld-policy" "$REPO_ROOT/src/policy.c" -lsqlite3 \
+    && echo "[tarball] policy worker compiled ($(du -h "$BUNDLE/digiwelld-policy" | cut -f1))" \
+    || echo "[tarball] WARNING: policy worker build failed — continuing without it"
+else
+  echo "[tarball] WARNING: no C compiler — skipping digiwelld-policy (install gcc or clang)"
+fi
+
+echo "[tarball] compiling digiwelld store worker..."
+if command -v "$CC_BIN" >/dev/null 2>&1; then
+  $CC_BIN -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/digiwelld-store" "$REPO_ROOT/src/store.c" -lsqlite3 \
+    && echo "[tarball] store worker compiled ($(du -h "$BUNDLE/digiwelld-store" | cut -f1))" \
+    || echo "[tarball] WARNING: store worker build failed — continuing without it"
+else
+  echo "[tarball] WARNING: no C compiler — skipping digiwelld-store (install gcc or clang)"
 fi
 
 echo "[tarball] compiling C notification helper..."

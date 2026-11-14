@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/crash_reporter.dart';
 import 'package:screenguard/services/daemon_service.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/services/feedback_service.dart';
 import 'package:screenguard/services/sound_service.dart';
 import 'package:screenguard/services/theme_service.dart';
@@ -11,11 +11,11 @@ import 'package:screenguard/services/update_checker.dart';
 import 'package:screenguard/screens/crash_reports_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  final DatabaseService db;
+  final ScreenGuardApi api;
   final int initialTabIndex;
   const SettingsScreen({
     super.key,
-    required this.db,
+    required this.api,
     this.initialTabIndex = 0,
   });
 
@@ -88,36 +88,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _loadSettings() {
     // Tab 1: General
-    _notificationsEnabled = widget.db.isNotificationsGloballyEnabled();
-    _soundEnabled = widget.db.isSoundGloballyEnabled();
-    _soundTheme = widget.db.getSoundTheme();
-    _customSoundPath = widget.db.getCustomSoundPath();
+    _notificationsEnabled = widget.api.policy.isNotificationsGloballyEnabled();
+    _soundEnabled = widget.api.policy.isSoundGloballyEnabled();
+    _soundTheme = widget.api.policy.getSoundTheme();
+    _customSoundPath = widget.api.policy.getCustomSoundPath();
 
-    _notifyGoal50 = widget.db.isEventNotificationEnabled('daily_goal_50');
-    _soundGoal50 = widget.db.isEventSoundEnabled('daily_goal_50');
-    _notifyGoal100 = widget.db.isEventNotificationEnabled('daily_goal_100');
-    _soundGoal100 = widget.db.isEventSoundEnabled('daily_goal_100');
-    _notifyGoalOvertime = widget.db.isEventNotificationEnabled('goal_overtime');
-    _soundGoalOvertime = widget.db.isEventSoundEnabled('goal_overtime');
-    _notifyAppLimit = widget.db.isEventNotificationEnabled('app_limit');
-    _soundAppLimit = widget.db.isEventSoundEnabled('app_limit');
-    _notifyFocusMode = widget.db.isEventNotificationEnabled('focus_mode');
-    _soundFocusMode = widget.db.isEventSoundEnabled('focus_mode');
-    _notifyFeedback = widget.db.isEventNotificationEnabled('feedback');
+    _notifyGoal50 = widget.api.policy.isEventNotificationEnabled('daily_goal_50');
+    _soundGoal50 = widget.api.policy.isEventSoundEnabled('daily_goal_50');
+    _notifyGoal100 = widget.api.policy.isEventNotificationEnabled('daily_goal_100');
+    _soundGoal100 = widget.api.policy.isEventSoundEnabled('daily_goal_100');
+    _notifyGoalOvertime = widget.api.policy.isEventNotificationEnabled('goal_overtime');
+    _soundGoalOvertime = widget.api.policy.isEventSoundEnabled('goal_overtime');
+    _notifyAppLimit = widget.api.policy.isEventNotificationEnabled('app_limit');
+    _soundAppLimit = widget.api.policy.isEventSoundEnabled('app_limit');
+    _notifyFocusMode = widget.api.policy.isEventNotificationEnabled('focus_mode');
+    _soundFocusMode = widget.api.policy.isEventSoundEnabled('focus_mode');
+    _notifyFeedback = widget.api.policy.isEventNotificationEnabled('feedback');
 
     // Feedback requests published by the maintainer.
-    _feedbackService = FeedbackService(db: widget.db);
+    _feedbackService = FeedbackService(policy: widget.api.policy);
     _feedbackPromptId = _feedbackService.storedPromptId;
     _feedbackLastCheck = _feedbackService.lastCheckTime;
 
     // Tab 2: Limits & Pomodoro
-    _pomodoroLoopEnabled = widget.db.isPomodoroLoopEnabled();
-    _pomodoroCycles = widget.db.getPomodoroCyclesCount();
-    _pomodoroBreakMinutes = widget.db.getPomodoroBreakMinutes();
-    _focusStrictAutoclose = widget.db.isFocusStrictAutoclose();
+    _pomodoroLoopEnabled = widget.api.policy.isPomodoroLoopEnabled();
+    _pomodoroCycles = widget.api.policy.getPomodoroCyclesCount();
+    _pomodoroBreakMinutes = widget.api.policy.getPomodoroBreakMinutes();
+    _focusStrictAutoclose = widget.api.policy.isFocusStrictAutoclose();
 
     // Tab 4: Updates & Crash Reports
-    _updateChecker = UpdateChecker(db: widget.db);
+    _updateChecker = UpdateChecker(policy: widget.api.policy);
     _checkUpdatesEnabled = _updateChecker.checkUpdatesEnabled;
     _includeBeta = _updateChecker.includeBeta;
     _checkFrequency = _updateChecker.checkFrequency;
@@ -131,9 +131,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _refreshDataStats() {
     setState(() => _dataLoading = true);
     try {
-      _dataFileBytes = widget.db.databaseFileSize();
-      _dataSessionCount = widget.db.sessionCount();
-      final range = widget.db.sessionDateRange();
+      _dataFileBytes = widget.api.maintenance.databaseFileSize();
+      _dataSessionCount = widget.api.maintenance.sessionCount();
+      final range = widget.api.usage.sessionDateRange();
       _dataOldest =
           range == null ? null : DateTime.fromMillisecondsSinceEpoch(range[0]);
       _dataNewest =
@@ -154,8 +154,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _customSoundPath = path;
         _soundTheme = 'custom';
       });
-      widget.db.setCustomSoundPath(path);
-      widget.db.setSoundTheme('custom');
+      widget.api.policy.setCustomSoundPath(path);
+      widget.api.policy.setSoundTheme('custom');
     }
   }
 
@@ -360,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: _notificationsEnabled,
           onChanged: (val) {
             setState(() => _notificationsEnabled = val);
-            widget.db.setNotificationsGloballyEnabled(val);
+            widget.api.policy.setNotificationsGloballyEnabled(val);
           },
         ),
         const Divider(height: 1),
@@ -371,7 +371,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: _soundEnabled,
           onChanged: (val) {
             setState(() => _soundEnabled = val);
-            widget.db.setSoundGloballyEnabled(val);
+            widget.api.policy.setSoundGloballyEnabled(val);
           },
         ),
       ],
@@ -426,7 +426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? (val) {
                       if (val != null) {
                         setState(() => _soundTheme = val);
-                        widget.db.setSoundTheme(val);
+                        widget.api.policy.setSoundTheme(val);
                       }
                     }
                   : null,
@@ -442,7 +442,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ? (val) {
                     if (val != null) {
                       setState(() => _soundTheme = val);
-                      widget.db.setSoundTheme(val);
+                      widget.api.policy.setSoundTheme(val);
                     }
                   }
                 : null,
@@ -520,11 +520,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           soundVal: _soundGoal50,
           onNotifyChanged: (val) {
             setState(() => _notifyGoal50 = val);
-            widget.db.setEventNotificationEnabled('daily_goal_50', val);
+            widget.api.policy.setEventNotificationEnabled('daily_goal_50', val);
           },
           onSoundChanged: (val) {
             setState(() => _soundGoal50 = val);
-            widget.db.setEventSoundEnabled('daily_goal_50', val);
+            widget.api.policy.setEventSoundEnabled('daily_goal_50', val);
           },
         ),
         const Divider(height: 24),
@@ -536,11 +536,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           soundVal: _soundGoal100,
           onNotifyChanged: (val) {
             setState(() => _notifyGoal100 = val);
-            widget.db.setEventNotificationEnabled('daily_goal_100', val);
+            widget.api.policy.setEventNotificationEnabled('daily_goal_100', val);
           },
           onSoundChanged: (val) {
             setState(() => _soundGoal100 = val);
-            widget.db.setEventSoundEnabled('daily_goal_100', val);
+            widget.api.policy.setEventSoundEnabled('daily_goal_100', val);
           },
         ),
         const Divider(height: 24),
@@ -552,11 +552,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           soundVal: _soundGoalOvertime,
           onNotifyChanged: (val) {
             setState(() => _notifyGoalOvertime = val);
-            widget.db.setEventNotificationEnabled('goal_overtime', val);
+            widget.api.policy.setEventNotificationEnabled('goal_overtime', val);
           },
           onSoundChanged: (val) {
             setState(() => _soundGoalOvertime = val);
-            widget.db.setEventSoundEnabled('goal_overtime', val);
+            widget.api.policy.setEventSoundEnabled('goal_overtime', val);
           },
         ),
         const Divider(height: 24),
@@ -568,11 +568,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           soundVal: _soundAppLimit,
           onNotifyChanged: (val) {
             setState(() => _notifyAppLimit = val);
-            widget.db.setEventNotificationEnabled('app_limit', val);
+            widget.api.policy.setEventNotificationEnabled('app_limit', val);
           },
           onSoundChanged: (val) {
             setState(() => _soundAppLimit = val);
-            widget.db.setEventSoundEnabled('app_limit', val);
+            widget.api.policy.setEventSoundEnabled('app_limit', val);
           },
         ),
         const Divider(height: 24),
@@ -584,11 +584,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           soundVal: _soundFocusMode,
           onNotifyChanged: (val) {
             setState(() => _notifyFocusMode = val);
-            widget.db.setEventNotificationEnabled('focus_mode', val);
+            widget.api.policy.setEventNotificationEnabled('focus_mode', val);
           },
           onSoundChanged: (val) {
             setState(() => _soundFocusMode = val);
-            widget.db.setEventSoundEnabled('focus_mode', val);
+            widget.api.policy.setEventSoundEnabled('focus_mode', val);
           },
         ),
       ],
@@ -644,7 +644,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: _notifyFeedback,
           onChanged: (val) {
             setState(() => _notifyFeedback = val);
-            widget.db.setEventNotificationEnabled('feedback', val);
+            widget.api.policy.setEventNotificationEnabled('feedback', val);
           },
         ),
         const Divider(height: 1),
@@ -867,7 +867,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: enabled,
           onChanged: (val) {
             setState(() => _pomodoroLoopEnabled = val);
-            widget.db.setPomodoroLoopEnabled(val);
+            widget.api.policy.setPomodoroLoopEnabled(val);
           },
           contentPadding: EdgeInsets.zero,
         ),
@@ -891,13 +891,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onDecrement: () {
                   if (_pomodoroCycles > 1) {
                     setState(() => _pomodoroCycles--);
-                    widget.db.setPomodoroCyclesCount(_pomodoroCycles);
+                    widget.api.policy.setPomodoroCyclesCount(_pomodoroCycles);
                   }
                 },
                 onIncrement: () {
                   if (_pomodoroCycles < 20) {
                     setState(() => _pomodoroCycles++);
-                    widget.db.setPomodoroCyclesCount(_pomodoroCycles);
+                    widget.api.policy.setPomodoroCyclesCount(_pomodoroCycles);
                   }
                 },
                 onEdit: enabled ? () => _showNumberInputDialog(
@@ -908,7 +908,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   unit: 'cycles',
                   onConfirm: (val) {
                     setState(() => _pomodoroCycles = val);
-                    widget.db.setPomodoroCyclesCount(val);
+                    widget.api.policy.setPomodoroCyclesCount(val);
                   },
                 ) : null,
               ),
@@ -928,13 +928,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onDecrement: () {
                   if (_pomodoroBreakMinutes > 1) {
                     setState(() => _pomodoroBreakMinutes--);
-                    widget.db.setPomodoroBreakMinutes(_pomodoroBreakMinutes);
+                    widget.api.policy.setPomodoroBreakMinutes(_pomodoroBreakMinutes);
                   }
                 },
                 onIncrement: () {
                   if (_pomodoroBreakMinutes < 60) {
                     setState(() => _pomodoroBreakMinutes++);
-                    widget.db.setPomodoroBreakMinutes(_pomodoroBreakMinutes);
+                    widget.api.policy.setPomodoroBreakMinutes(_pomodoroBreakMinutes);
                   }
                 },
                 onEdit: enabled ? () => _showNumberInputDialog(
@@ -945,7 +945,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   unit: 'minutes',
                   onConfirm: (val) {
                     setState(() => _pomodoroBreakMinutes = val);
-                    widget.db.setPomodoroBreakMinutes(val);
+                    widget.api.policy.setPomodoroBreakMinutes(val);
                   },
                 ) : null,
               ),
@@ -1035,7 +1035,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: _focusStrictAutoclose,
           onChanged: (val) {
             setState(() => _focusStrictAutoclose = val);
-            widget.db.setFocusStrictAutoclose(val);
+            widget.api.policy.setFocusStrictAutoclose(val);
           },
           contentPadding: EdgeInsets.zero,
         ),
@@ -1423,7 +1423,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   trailing: OutlinedButton(
                     onPressed: () {
-                      widget.db.setSetting('daemon_initial_choice', '');
+                      widget.api.policy.setSetting('daemon_initial_choice', '');
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Initial setup preference reset.'),
@@ -2173,7 +2173,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _dataBusy = true);
     int n = 0;
     try {
-      n = widget.db.deleteSessionsInRange(range.start, range.end);
+      n = widget.api.maintenance.deleteSessionsInRange(range.start, range.end);
     } catch (e) {
       _snack('Delete failed: $e', error: true);
     }
@@ -2200,7 +2200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _dataBusy = true);
     int n = 0;
     try {
-      n = widget.db.deleteSessionsOnDates(sorted);
+      n = widget.api.maintenance.deleteSessionsOnDates(sorted);
     } catch (e) {
       _snack('Delete failed: $e', error: true);
     }
@@ -2226,7 +2226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _dataBusy = true);
     int n = 0;
     try {
-      n = widget.db.clearAllUsageData();
+      n = widget.api.maintenance.clearAllUsageData();
     } catch (e) {
       _snack('Delete failed: $e', error: true);
     }
@@ -2269,8 +2269,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     subtitle: Text(
                       _dataOldest == null
-                          ? 'No history recorded yet.\n${widget.db.path}'
-                          : '${_fmtDay(_dataOldest!)} → ${_fmtDay(_dataNewest!)}\n${widget.db.path}',
+                          ? 'No history recorded yet.\n${widget.api.maintenance.databaseFilePath()}'
+                          : '${_fmtDay(_dataOldest!)} → ${_fmtDay(_dataNewest!)}\n${widget.api.maintenance.databaseFilePath()}',
                       style: const TextStyle(fontSize: 12),
                     ),
                     trailing: IconButton(

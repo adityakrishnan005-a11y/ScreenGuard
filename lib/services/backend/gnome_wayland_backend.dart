@@ -210,4 +210,38 @@ class GnomeWaylandBackend implements WindowBackend {
     } catch (_) {}
     return false;
   }
+
+  /// Ask the shell extension to activate a *different* window. Falls back to
+  /// synthesizing Alt+Tab through `wtype` when the extension is missing or too
+  /// old to expose the method.
+  @override
+  Future<bool> switchAwayFromActiveWindow() async {
+    try {
+      final r = await Process.run('gdbus', [
+        'call',
+        '--session',
+        '--dest',
+        'org.gnome.Shell',
+        '--object-path',
+        '/org/gnome/Shell/Extensions/ScreenGuard',
+        '--method',
+        'org.gnome.Shell.Extensions.ScreenGuard.SwitchAwayFromActiveWindow',
+      ]).timeout(const Duration(seconds: 2));
+      if (r.exitCode == 0 && r.stdout.toString().contains('true')) {
+        return true;
+      }
+    } catch (_) {}
+
+    // wtype talks to the compositor's virtual-keyboard protocol; it is only
+    // present on some setups, so a failure here is expected and harmless.
+    try {
+      final r = await Process.run(
+        'wtype',
+        ['-M', 'alt', '-k', 'Tab', '-m', 'alt'],
+      ).timeout(const Duration(seconds: 2));
+      return r.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
 }

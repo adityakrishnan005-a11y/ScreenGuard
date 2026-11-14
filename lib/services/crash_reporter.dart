@@ -432,7 +432,8 @@ class CrashReporter {
 
   /// Record a crash/error event.
   ///
-  /// [source] identifies where the crash happened: 'daemon', 'gui', or 'watchdog'.
+  /// [source] identifies where the crash happened: 'daemon', 'gui', or
+  /// 'digiwelld' (with legacy 'watchdog' reports still readable).
   /// [error] is the error message or exception.toString().
   /// [stackTrace] is the stack trace string (truncated to 50 lines).
   /// [extra] is optional additional context.

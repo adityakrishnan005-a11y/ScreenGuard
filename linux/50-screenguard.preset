@@ -1,1 +1,4 @@
-enable screenguard.service
+# digiwelld owns the socket, the crash budget and the daemon, so it is the
+# unit to enable. screenguard.service stays installed as a manual fallback;
+# the two carry Conflicts= and can never run together.
+enable digiwelld.service

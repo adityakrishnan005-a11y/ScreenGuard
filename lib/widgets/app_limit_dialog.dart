@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/utils/format.dart';
 
 class AppLimitDialog extends StatefulWidget {
@@ -134,8 +134,8 @@ class _AppLimitDialogState extends State<AppLimitDialog> {
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             onPressed: () {
-              final db = Provider.of<DatabaseService>(context, listen: false);
-              db.deleteAppLimit(widget.app);
+              final api = Provider.of<ScreenGuardApi>(context, listen: false);
+              api.policy.deleteAppLimit(widget.app);
               Navigator.of(context).pop();
             },
             child: const Text('Remove Limit'),
@@ -146,8 +146,8 @@ class _AppLimitDialogState extends State<AppLimitDialog> {
         ),
         ElevatedButton(
           onPressed: () {
-            final db = Provider.of<DatabaseService>(context, listen: false);
-            db.setAppLimit(widget.app, _selectedMs);
+            final api = Provider.of<ScreenGuardApi>(context, listen: false);
+            api.policy.setAppLimit(widget.app, _selectedMs);
             Navigator.of(context).pop();
           },
           child: const Text('Save Limit'),

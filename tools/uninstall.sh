@@ -53,10 +53,14 @@ else
   AUTOSTART_DIR="${HOME}/.config/autostart"
 fi
 UNIT_FILE="$UNIT_DIR/screenguard.service"
+DIGIWELLD_UNIT_FILE="$UNIT_DIR/digiwelld.service"
+LEGACY_BROKER_UNIT_FILE="$UNIT_DIR/screenguard-broker.service"
 AUTOSTART_FILE="$AUTOSTART_DIR/screenguard-daemon.desktop"
 
 # Check something is actually installed
-if [ ! -d "$APP_DIR" ] && [ ! -L "$BIN_DIR/screenguard" ] && [ ! -f "$UNIT_FILE" ]; then
+if [ ! -d "$APP_DIR" ] && [ ! -L "$BIN_DIR/screenguard" ] \
+   && [ ! -f "$UNIT_FILE" ] && [ ! -f "$DIGIWELLD_UNIT_FILE" ] \
+   && [ ! -f "$LEGACY_BROKER_UNIT_FILE" ]; then
   log "nothing found to uninstall under prefix '$PREFIX'."
   log "If you used a custom prefix, pass it with --prefix DIR."
   exit 0
@@ -67,19 +71,54 @@ fi
 # ---------------------------------------------------------------------------
 if command -v systemctl >/dev/null 2>&1; then
   if [ "$SYSTEM" -eq 1 ]; then
-    systemctl --global disable screenguard.service 2>/dev/null && \
-      log "disabled screenguard.service globally" || true
-    systemctl stop screenguard.service 2>/dev/null || true
+    systemctl --global disable screenguard.service digiwelld.service screenguard-broker.service 2>/dev/null && \
+      log "disabled ScreenGuard user units globally" || true
+    systemctl stop digiwelld.service screenguard-broker.service screenguard.service 2>/dev/null || true
   else
+    systemctl --user disable --now digiwelld.service 2>/dev/null && \
+      log "stopped and disabled digiwelld.service (user)" || true
+    systemctl --user disable --now screenguard-broker.service 2>/dev/null || true
     systemctl --user disable --now screenguard.service 2>/dev/null && \
       log "stopped and disabled screenguard.service (user)" || true
   fi
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Kill any running daemon process
+# 2. Kill any running supervisor, daemon or session worker
 # ---------------------------------------------------------------------------
+# Supervisors first: a live digiwelld would respawn the daemon we just killed.
+# Match by resolved executable basename, never pgrep -f, and stay inside this
+# session's XDG_RUNTIME_DIR so another login's install is untouched.
+_kill_session_procs() { # $1 = signal, rest = basenames
+  local sig="$1"; shift
+  local d pid exe base want rt
+  [ -n "${XDG_RUNTIME_DIR:-}" ] || return 0
+  for d in /proc/[0-9]*; do
+    pid="${d#/proc/}"
+    case "$pid" in *[!0-9]*) continue ;; esac
+    [ "$pid" = "$$" ] && continue
+    exe="$(readlink "$d/exe" 2>/dev/null || true)"
+    [ -n "$exe" ] || continue
+    base="${exe##*/}"
+    for want in "$@"; do
+      if [ "$base" = "$want" ]; then
+        rt="$(cat "$d/environ" 2>/dev/null | tr '\0' '\n' \
+          | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -n 1)"
+        if [ -z "$rt" ] || [ "$rt" = "$XDG_RUNTIME_DIR" ]; then
+          kill "-$sig" "$pid" 2>/dev/null || true
+          _killed=1
+        fi
+        break
+      fi
+    done
+  done
+  return 0
+}
+
 _killed=0
+_kill_session_procs TERM digiwelld screenguard-broker screenguard-watchdog
+sleep 1
+_kill_session_procs KILL digiwelld digiwelld-session digiwelld-usage digiwelld-policy digiwelld-store screenguard-broker screenguard-watchdog
 for d in /proc/[0-9]*; do
   pid="${d#/proc/}"
   case "$pid" in *[!0-9]*) continue ;; esac
@@ -99,24 +138,28 @@ for d in /proc/[0-9]*; do
     fi
   done < <(tr '\0' '\n' < "$d/cmdline" 2>/dev/null)
 done
-[ "$_killed" -eq 1 ] && log "killed running daemon process"
+[ "$_killed" -eq 1 ] && log "killed running ScreenGuard processes"
 
 # ---------------------------------------------------------------------------
 # 3. Remove files
 # ---------------------------------------------------------------------------
 removed=0
 
-if [ -f "$UNIT_FILE" ]; then
-  rm -f "$UNIT_FILE"
-  log "removed $UNIT_FILE"
-  if command -v systemctl >/dev/null 2>&1; then
-    if [ "$SYSTEM" -eq 1 ]; then
-      systemctl daemon-reload 2>/dev/null || true
-    else
-      systemctl --user daemon-reload 2>/dev/null || true
-    fi
+_unit_removed=0
+for _uf in "$UNIT_FILE" "$DIGIWELLD_UNIT_FILE" "$LEGACY_BROKER_UNIT_FILE"; do
+  if [ -f "$_uf" ]; then
+    rm -f "$_uf"
+    log "removed $_uf"
+    _unit_removed=1
+    removed=1
   fi
-  removed=1
+done
+if [ "$_unit_removed" -eq 1 ] && command -v systemctl >/dev/null 2>&1; then
+  if [ "$SYSTEM" -eq 1 ]; then
+    systemctl daemon-reload 2>/dev/null || true
+  else
+    systemctl --user daemon-reload 2>/dev/null || true
+  fi
 fi
 
 if [ -f "$AUTOSTART_FILE" ]; then
@@ -125,7 +168,11 @@ if [ -f "$AUTOSTART_FILE" ]; then
   removed=1
 fi
 
-for link in "$BIN_DIR/screenguard" "$BIN_DIR/screenguard-daemon"; do
+for link in "$BIN_DIR/screenguard" "$BIN_DIR/screenguard-daemon" \
+            "$BIN_DIR/screenguard-watchdog" "$BIN_DIR/screenguard-broker" \
+            "$BIN_DIR/digiwelld" "$BIN_DIR/digiwelld-session" \
+            "$BIN_DIR/digiwelld-usage" "$BIN_DIR/digiwelld-policy" \
+            "$BIN_DIR/digiwelld-store"; do
   if [ -L "$link" ] || [ -f "$link" ]; then
     rm -f "$link"
     log "removed $link"

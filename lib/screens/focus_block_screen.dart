@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/app_killer.dart';
-import 'package:screenguard/services/db.dart';
-import 'package:screenguard/screens/dashboard.dart';
+import 'package:screenguard/api/screenguard_api.dart';
+import 'package:screenguard/services/lockout_window.dart';
 
 /// Persistent focus-mode warning, mirroring TimesUpScreen.
 ///
@@ -22,29 +22,17 @@ class FocusBlockScreen extends StatelessWidget {
     this.pid,
   });
 
-  Future<void> _closeApp(BuildContext context, DatabaseService db) async {
+  Future<void> _closeApp(BuildContext context, ScreenGuardApi api) async {
     // NOTE: no WM_DELETE here on purpose — the focused window right now is
-    // this popup itself, so asking the compositor to close "the active
+    // this overlay itself, so asking the compositor to close "the active
     // window" would suicide this screen before the kill stages run.
-    final killed = await AppKiller.close(app: app, pid: pid, politeClose: false);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(killed
-              ? '$appName was closed.'
-              : 'Could not close $appName — close it manually.'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
-    }
+    await AppKiller.close(app: app, pid: pid, politeClose: false);
+    LockoutWindow.close();
   }
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<DatabaseService>(context);
+    final api = Provider.of<ScreenGuardApi>(context);
 
     return Scaffold(
       body: Center(
@@ -100,18 +88,8 @@ class FocusBlockScreen extends StatelessWidget {
                             ),
                           ),
                           onPressed: () {
-                            db.setFocusGraceMinutes(app, 1);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    '1 minute to save your work in $appName.'),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                  builder: (_) => const DashboardScreen()),
-                            );
+                            api.policy.setFocusGraceMinutes(app, 1);
+                            LockoutWindow.close();
                           },
                           icon: const Icon(Icons.more_time_rounded),
                           label: const Text('+1 Minute'),
@@ -128,7 +106,7 @@ class FocusBlockScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
-                          onPressed: () => _closeApp(context, db),
+                          onPressed: () => _closeApp(context, api),
                           icon: const Icon(Icons.close_rounded),
                           label: const Text('Close App'),
                         ),
@@ -139,12 +117,7 @@ class FocusBlockScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: TextButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                              builder: (_) => const DashboardScreen()),
-                        );
-                      },
+                      onPressed: LockoutWindow.toDashboard,
                       icon: const Icon(Icons.dashboard_rounded),
                       label: const Text('Back to Dashboard'),
                     ),

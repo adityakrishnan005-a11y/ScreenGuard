@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/services/notification_service.dart';
 import 'package:screenguard/services/app_resolver.dart';
 import 'package:screenguard/services/app_icon.dart';
@@ -49,12 +49,12 @@ class _FocusScreenState extends State<FocusScreen> {
   }
 
   void _loadState() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    final state = db.getActiveFocusState();
-    final apps = db.getDistractingApps();
+    final api = Provider.of<ScreenGuardApi>(context, listen: false);
+    final state = api.policy.getActiveFocusState();
+    final apps = api.policy.getDistractingApps();
 
     // Build a lookup of DB-tracked totals keyed by app id
-    final tracked = db.allTrackedApps();
+    final tracked = api.usage.allTrackedApps();
     final trackedTotals = <String, int>{};
     for (final row in tracked) {
       trackedTotals[row['app'] as String] = (row['t'] as int?) ?? 0;
@@ -113,8 +113,8 @@ class _FocusScreenState extends State<FocusScreen> {
   }
 
   void _updateTimer() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    final state = db.getActiveFocusState();
+    final api = Provider.of<ScreenGuardApi>(context, listen: false);
+    final state = api.policy.getActiveFocusState();
     if (state != null) {
       final isPaused = (state['is_paused'] as int? ?? 0) == 1;
       final isBreakNow = (state['is_break'] as int? ?? 0) == 1;
@@ -140,7 +140,7 @@ class _FocusScreenState extends State<FocusScreen> {
       final diff = ((endTime - now) / 1000).ceil();
       if (diff <= 0) {
         // Phase completed — let DB transition to next phase, then reload UI
-        db.getActiveFocusState(); // triggers DB state machine
+        api.policy.getActiveFocusState(); // triggers DB state machine
         _loadState(); // reload whatever phase is now active
       } else {
         setState(() {
@@ -176,12 +176,12 @@ class _FocusScreenState extends State<FocusScreen> {
 
 
   void _startSession() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    db.startFocusSession(_selectedDurationMinutes);
+    final api = Provider.of<ScreenGuardApi>(context, listen: false);
+    api.policy.startFocusSession(_selectedDurationMinutes);
     _loadState();
 
     NotificationService.show(
-      db: db,
+      policy: api.policy,
       eventKey: 'focus_mode',
       title: 'Focus Mode Started 🎯',
       body: 'Focus session active for $_selectedDurationMinutes minutes.',
@@ -190,12 +190,12 @@ class _FocusScreenState extends State<FocusScreen> {
   }
 
   void _pauseSession() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    db.pauseFocusSession();
+    final api = Provider.of<ScreenGuardApi>(context, listen: false);
+    api.policy.pauseFocusSession();
     _loadState();
 
     NotificationService.show(
-      db: db,
+      policy: api.policy,
       eventKey: 'focus_mode',
       title: 'Focus Mode Paused ⏸️',
       body: 'Your focus session is temporarily paused.',
@@ -204,12 +204,12 @@ class _FocusScreenState extends State<FocusScreen> {
   }
 
   void _resumeSession() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    db.resumeFocusSession();
+    final api = Provider.of<ScreenGuardApi>(context, listen: false);
+    api.policy.resumeFocusSession();
     _loadState();
 
     NotificationService.show(
-      db: db,
+      policy: api.policy,
       eventKey: 'focus_mode',
       title: 'Focus Mode Resumed ▶️',
       body: 'Focus session resumed.',
@@ -218,8 +218,8 @@ class _FocusScreenState extends State<FocusScreen> {
   }
 
   void _cancelSession() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    db.cancelFocusSession();
+    final api = Provider.of<ScreenGuardApi>(context, listen: false);
+    api.policy.cancelFocusSession();
     _loadState();
   }
 
@@ -300,8 +300,8 @@ class _FocusScreenState extends State<FocusScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<DatabaseService>(context);
-    final completedCount = db.getCompletedFocusSessionsToday();
+    final api = Provider.of<ScreenGuardApi>(context);
+    final completedCount = api.usage.getCompletedFocusSessionsToday();
     // During break, the arc should fill over break duration; during focus, over focus duration
     final totalDurationSec = _isBreak
         ? _breakDurationMinutes * 60
@@ -328,7 +328,7 @@ class _FocusScreenState extends State<FocusScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => SettingsScreen(db: context.read<DatabaseService>()),
+                  builder: (context) => SettingsScreen(api: context.read<ScreenGuardApi>()),
                 ),
               );
             },
@@ -658,10 +658,10 @@ class _FocusScreenState extends State<FocusScreen> {
                                     fontWeight: FontWeight.w600)),
                             const SizedBox(width: 6),
                             Switch(
-                              value: db.isFocusAppGridLayout(),
+                              value: api.policy.isFocusAppGridLayout(),
                               activeColor: Colors.teal,
                               onChanged: (val) =>
-                                  setState(() => db.setFocusAppGridLayout(val)),
+                                  setState(() => api.policy.setFocusAppGridLayout(val)),
                             ),
                           ],
                         ),
@@ -673,7 +673,7 @@ class _FocusScreenState extends State<FocusScreen> {
                             child: Text('No matching apps found.',
                                 style: TextStyle(color: Colors.grey)),
                           )
-                        else if (db.isFocusAppGridLayout())
+                        else if (api.policy.isFocusAppGridLayout())
                           // Grid layout: GNOME app-grid style — icon above
                           // the name, selection shown by a checkbox badge.
                           GridView.builder(
@@ -696,7 +696,7 @@ class _FocusScreenState extends State<FocusScreen> {
                                 selected: _distractingApps
                                     .contains(item['app'] as String),
                                 onTap: () {
-                                  db.toggleDistractingApp(item['app'] as String);
+                                  api.policy.toggleDistractingApp(item['app'] as String);
                                   _loadState();
                                 },
                               );
@@ -728,7 +728,7 @@ class _FocusScreenState extends State<FocusScreen> {
                                   style: const TextStyle(fontSize: 12),
                                 ),
                                 onChanged: (_) {
-                                  db.toggleDistractingApp(app);
+                                  api.policy.toggleDistractingApp(app);
                                   _loadState();
                                 },
                               );

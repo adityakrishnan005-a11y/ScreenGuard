@@ -1,0 +1,27 @@
+[Unit]
+Description=ScreenGuard Supervisor (native socket, auth, routing, daemon supervision)
+Documentation=https://github.com/adityakrishnan005-a11y/ScreenGuard
+PartOf=graphical-session.target
+After=graphical-session.target
+# digiwelld spawns and supervises its own daemon. Running the standalone
+# daemon unit at the same time would give two daemons racing on daemon.lock,
+# so the two units are mutually exclusive by construction.
+Conflicts=screenguard.service
+
+[Service]
+Type=simple
+# %t is the per-user runtime directory (XDG_RUNTIME_DIR). digiwelld creates
+# %t/screenguard itself with mode 0700 and the control socket with mode 0600.
+# The session, usage, policy and store workers are optional and kept in step
+# by the installer.
+ExecStart=/usr/bin/digiwelld --runtime %t/screenguard --daemon /usr/bin/screenguard-daemon --session-worker /usr/bin/digiwelld-session --usage-worker /usr/bin/digiwelld-usage --policy-worker /usr/bin/digiwelld-policy --store-worker /usr/bin/digiwelld-store
+# digiwelld never exits on its own; if it dies, systemd brings it back and
+# it re-owns the socket, the crash budget and the daemon.
+Restart=always
+RestartSec=2
+# digiwelld forwards SIGTERM to its children and waits up to 5s for each.
+TimeoutStopSec=15
+KillMode=control-group
+
+[Install]
+WantedBy=graphical-session.target

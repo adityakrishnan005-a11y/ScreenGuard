@@ -16,6 +16,9 @@ const DBusInterface = `
     <method name="CloseActiveWindow">
       <arg type="b" direction="out" name="success"/>
     </method>
+    <method name="SwitchAwayFromActiveWindow">
+      <arg type="b" direction="out" name="success"/>
+    </method>
     <method name="CloseWindowByPid">
       <arg type="i" direction="in" name="pid"/>
       <arg type="b" direction="out" name="success"/>
@@ -126,6 +129,30 @@ export default class ScreenGuardExtension extends Extension {
             }
         } catch (e) {
             console.error(`[ScreenGuard] Error in CloseActiveWindow: ${e}`);
+        }
+        return false;
+    }
+
+    SwitchAwayFromActiveWindow() {
+        try {
+            const focused = global.display.focus_window;
+            const actors = global.get_window_actors ? global.get_window_actors() : [];
+            const candidates = [];
+            for (const actor of actors) {
+                const win = actor.meta_window;
+                if (!win) continue;
+                if (focused && win === focused) continue;
+                if (win.minimized) continue;
+                if (win.is_skip_taskbar && win.is_skip_taskbar()) continue;
+                candidates.push(win);
+            }
+            if (candidates.length === 0) return false;
+            // Most recently used candidate first: a single Alt+Tab-like hop.
+            const target = candidates[candidates.length - 1];
+            target.activate(global.get_current_time());
+            return true;
+        } catch (e) {
+            console.error(`[ScreenGuard] Error in SwitchAwayFromActiveWindow: ${e}`);
         }
         return false;
     }

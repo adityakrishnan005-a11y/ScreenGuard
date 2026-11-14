@@ -42,8 +42,14 @@ contents:
     dst: /usr/bin/screenguard-notify
   - src: build/linux/x64/release/bundle/screenguard-killer
     dst: /usr/bin/screenguard-killer
+  - src: build/linux/x64/release/bundle/screenguard-broker
+    dst: /usr/bin/screenguard-broker
+  - src: build/linux/x64/release/bundle/cinnamon_focus
+    dst: /usr/lib/screenguard/cinnamon_focus
   - src: linux/screenguard.service
     dst: /usr/lib/systemd/user/screenguard.service
+  - src: linux/screenguard-broker.service
+    dst: /usr/lib/systemd/user/screenguard-broker.service
   - src: linux/50-screenguard.preset
     dst: /usr/lib/systemd/user-preset/50-screenguard.preset
   - src: linux/screenguard.desktop

@@ -15,6 +15,7 @@
   flutter344,
   fetchFromGitHub,
   autoPatchelfHook,
+  pkg-config,
   gtk3,
   glib, # gio/gio.h for src/notify.c (headers via pkg-config)
   at-spi2-core,
@@ -48,10 +49,16 @@ flutter344.buildFlutterApplication {
   pname = "screenguard";
   inherit version src;
 
+  strictDeps = true;
+  __structuredAttrs = true;
+
   gitHashes = lib.importJSON ./git-hashes.json;
   pubspecLock = lib.importJSON ./pubspec.lock.json;
 
-  nativeBuildInputs = [ autoPatchelfHook ];
+  nativeBuildInputs = [
+    autoPatchelfHook
+    pkg-config
+  ];
 
   buildInputs = [
     gtk3
@@ -61,8 +68,14 @@ flutter344.buildFlutterApplication {
 
   # The daemon/helpers exec xdotool, xprop, xprintidle and python (pyatspi)
   # by name — make sure the wrapped $out/bin entries can find them.
-  extraWrapProgramArgs =
-    "--prefix PATH : ${lib.makeBinPath [ xdotool xprop xprintidle pyWithPyatspi ]}";
+  extraWrapProgramArgs = "--prefix PATH : ${
+    lib.makeBinPath [
+      xdotool
+      xprop
+      xprintidle
+      pyWithPyatspi
+    ]
+  }";
 
   # Runs after `flutter build linux`, before the bundle is moved to
   # $out/app/screenguard — perfect place to merge the C helpers and the

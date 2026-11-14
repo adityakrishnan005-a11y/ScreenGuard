@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/widgets/day_chart.dart';
 import 'package:screenguard/widgets/app_limit_dialog.dart';
 import 'package:screenguard/utils/format.dart';
@@ -29,16 +29,16 @@ class _AppDetailScreenState extends State<AppDetailScreen> {
   }
 
   void _load() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
+    final api = Provider.of<ScreenGuardApi>(context, listen: false);
     setState(() {
-      _history = db.appHistory(widget.app, days: 7);
+      _history = api.usage.appHistory(widget.app, days: 7);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<DatabaseService>(context);
-    final limitData = db.getAppLimit(widget.app);
+    final api = Provider.of<ScreenGuardApi>(context);
+    final limitData = api.policy.getAppLimit(widget.app);
     final limitMs = (limitData?['limit_ms'] as int?) ?? 0;
     final extMs = (limitData?['temp_extension_ms'] as int?) ?? 0;
     final hasLimit = limitMs > 0 && (limitData?['enabled'] as int? ?? 1) == 1;

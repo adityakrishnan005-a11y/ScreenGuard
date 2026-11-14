@@ -27,7 +27,7 @@ package() {
   # Core application bundle -> /opt/screenguard
   install -d "$pkgdir/opt/screenguard"
   cp -a screenguard screenguard-daemon data lib "$pkgdir/opt/screenguard/"
-  for helper in screenguard-watchdog screenguard-notify screenguard-killer; do
+  for helper in screenguard-watchdog screenguard-notify screenguard-killer screenguard-broker cinnamon_focus; do
     [ -f "$srcdir/$helper" ] && install -Dm755 "$srcdir/$helper" "$pkgdir/opt/screenguard/$helper"
   done
 
@@ -36,12 +36,13 @@ package() {
 
   # Executable symlinks in PATH
   install -d "$pkgdir/usr/bin"
-  for bin in screenguard screenguard-daemon screenguard-watchdog screenguard-notify screenguard-killer; do
+  for bin in screenguard screenguard-daemon screenguard-watchdog screenguard-notify screenguard-killer screenguard-broker cinnamon_focus; do
     [ -e "$pkgdir/opt/screenguard/$bin" ] && ln -s "/opt/screenguard/$bin" "$pkgdir/usr/bin/$bin"
   done
 
   # systemd user service, preset, desktop file and autostart
   install -Dm644 "$repo_root/linux/screenguard.service" "$pkgdir/usr/lib/systemd/user/screenguard.service"
+  install -Dm644 "$repo_root/linux/screenguard-broker.service" "$pkgdir/usr/lib/systemd/user/screenguard-broker.service"
   install -Dm644 "$repo_root/linux/50-screenguard.preset" "$pkgdir/usr/lib/systemd/user-preset/50-screenguard.preset"
   install -Dm644 "$repo_root/linux/screenguard.desktop" "$pkgdir/usr/share/applications/screenguard.desktop"
   install -Dm644 "$repo_root/linux/screenguard-autostart.desktop" "$pkgdir/etc/xdg/autostart/screenguard-autostart.desktop"

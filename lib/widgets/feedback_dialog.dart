@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/policy_api.dart';
 import 'package:screenguard/services/feedback_service.dart';
 
 /// One-time dialog that shows a feedback request published by the
@@ -27,9 +27,9 @@ class FeedbackDialog extends StatelessWidget {
   /// Show the pending request, if there is one.
   static Future<void> showIfNeeded(
     BuildContext context,
-    DatabaseService db,
+    PolicyApi policy,
   ) async {
-    final service = FeedbackService(db: db);
+    final service = FeedbackService(policy: policy);
     final prompt = service.activePrompt;
     if (prompt == null) return;
 

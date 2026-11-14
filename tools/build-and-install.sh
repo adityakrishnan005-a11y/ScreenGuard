@@ -73,23 +73,7 @@ log "compiling background daemon..."
 "$DART" compile exe "$REPO_ROOT/bin/daemon.dart" -o "$BUNDLE/screenguard-daemon"
 
 # ---------------------------------------------------------------------------
-# 3b. Compile C watchdog supervisor
-# ---------------------------------------------------------------------------
-log "compiling C watchdog supervisor..."
-if command -v cc >/dev/null 2>&1; then
-  cc -O2 -Wall -o "$BUNDLE/screenguard-watchdog" "$REPO_ROOT/src/watchdog.c" \
-    && log "watchdog compiled successfully" \
-    || log "WARNING: watchdog compilation failed (non-critical, daemon will run without it)"
-elif command -v gcc >/dev/null 2>&1; then
-  gcc -O2 -Wall -o "$BUNDLE/screenguard-watchdog" "$REPO_ROOT/src/watchdog.c" \
-    && log "watchdog compiled successfully" \
-    || log "WARNING: watchdog compilation failed (non-critical)"
-else
-  log "WARNING: no C compiler found — skipping watchdog build (install gcc or clang)"
-fi
-
-# ---------------------------------------------------------------------------
-# 3c. Compile C notification helper
+# 3b. Compile C notification helper
 # ---------------------------------------------------------------------------
 log "compiling C notification helper..."
 C_COMPILER="cc"
@@ -103,7 +87,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3d. Compile C process killer (TERM -> tree KILL -> wineserver -k)
+# 3c. Compile C process killer (TERM -> tree KILL -> wineserver -k)
 # ---------------------------------------------------------------------------
 log "compiling C process killer..."
 C_COMPILER="cc"
@@ -114,6 +98,93 @@ if command -v "$C_COMPILER" >/dev/null 2>&1; then
     || log "WARNING: process killer compilation failed (Close-app falls back to basic kill)"
 else
   log "WARNING: no C compiler found — skipping screenguard-killer build (Close-app falls back to basic kill)"
+fi
+
+# ---------------------------------------------------------------------------
+# 3d. Compile Cinnamon focus helper (muffin's debug D-Bus interface)
+# ---------------------------------------------------------------------------
+# Cinnamon hides the real focus window from the X server, so tracking there
+# needs this helper. It is harmless on every other desktop: the Cinnamon
+# backend only runs it when XDG_CURRENT_DESKTOP says Cinnamon.
+log "compiling Cinnamon focus helper..."
+C_COMPILER="cc"
+command -v cc >/dev/null 2>&1 || C_COMPILER="gcc"
+if command -v "$C_COMPILER" >/dev/null 2>&1 && pkg-config --exists gio-2.0 2>/dev/null; then
+  $C_COMPILER -O2 -Wall -Wextra $(pkg-config --cflags --libs gio-2.0) -o "$BUNDLE/cinnamon_focus" "$REPO_ROOT/bin/cinnamon_focus.c" \
+    && log "Cinnamon focus helper compiled successfully" \
+    || log "WARNING: Cinnamon focus helper compilation failed (Cinnamon falls back to X11 focus)"
+else
+  log "WARNING: no C compiler or pkg-config gio-2.0 — skipping cinnamon_focus build"
+fi
+
+# ---------------------------------------------------------------------------
+# 3e. Compile digiwelld (native front door + supervisor + crash budget)
+# ---------------------------------------------------------------------------
+log "compiling C supervisor..."
+C_COMPILER="cc"
+command -v cc >/dev/null 2>&1 || C_COMPILER="gcc"
+if command -v "$C_COMPILER" >/dev/null 2>&1; then
+  $C_COMPILER -O2 -Wall -Wextra -o "$BUNDLE/digiwelld" "$REPO_ROOT/src/digiwelld.c" \
+    && log "digiwelld compiled successfully" \
+    || log "WARNING: digiwelld compilation failed (GUI falls back to direct daemon access)"
+else
+  log "WARNING: no C compiler found — skipping digiwelld build"
+fi
+
+# ---------------------------------------------------------------------------
+# 3f. Compile digiwelld session worker (durable session journal + recovery)
+# ---------------------------------------------------------------------------
+log "compiling C session worker..."
+C_COMPILER="cc"
+command -v cc >/dev/null 2>&1 || C_COMPILER="gcc"
+if command -v "$C_COMPILER" >/dev/null 2>&1; then
+  $C_COMPILER -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/digiwelld-session" "$REPO_ROOT/src/session.c" \
+    && log "session worker compiled successfully" \
+    || log "WARNING: session worker compilation failed (Dart session memory stays authoritative)"
+else
+  log "WARNING: no C compiler found — skipping digiwelld-session build"
+fi
+
+# ---------------------------------------------------------------------------
+# 3g. Compile digiwelld usage worker (read-only SQLite read model)
+# ---------------------------------------------------------------------------
+log "compiling C usage worker..."
+C_COMPILER="cc"
+command -v cc >/dev/null 2>&1 || C_COMPILER="gcc"
+if command -v "$C_COMPILER" >/dev/null 2>&1; then
+  $C_COMPILER -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/digiwelld-usage" "$REPO_ROOT/src/usage.c" -lsqlite3 \
+    && log "usage worker compiled successfully" \
+    || log "WARNING: usage worker compilation failed (usage stays on the daemon)"
+else
+  log "WARNING: no C compiler found — skipping digiwelld-usage build"
+fi
+
+# ---------------------------------------------------------------------------
+# 3h. Compile digiwelld policy worker (policy intent + focus state machine)
+# ---------------------------------------------------------------------------
+log "compiling C policy worker..."
+C_COMPILER="cc"
+command -v cc >/dev/null 2>&1 || C_COMPILER="gcc"
+if command -v "$C_COMPILER" >/dev/null 2>&1; then
+  $C_COMPILER -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/digiwelld-policy" "$REPO_ROOT/src/policy.c" -lsqlite3 \
+    && log "policy worker compiled successfully" \
+    || log "WARNING: policy worker compilation failed (policy stays on the daemon)"
+else
+  log "WARNING: no C compiler found — skipping digiwelld-policy build"
+fi
+
+# ---------------------------------------------------------------------------
+# 3i. Compile digiwelld store worker (single SQLite writer: sessions + events)
+# ---------------------------------------------------------------------------
+log "compiling C store worker..."
+C_COMPILER="cc"
+command -v cc >/dev/null 2>&1 || C_COMPILER="gcc"
+if command -v "$C_COMPILER" >/dev/null 2>&1; then
+  $C_COMPILER -O2 -Wall -Wextra -std=c99 -o "$BUNDLE/digiwelld-store" "$REPO_ROOT/src/store.c" -lsqlite3 \
+    && log "store worker compiled successfully" \
+    || log "WARNING: store worker compilation failed (sessions stay on the daemon)"
+else
+  log "WARNING: no C compiler found — skipping digiwelld-store build"
 fi
 
 # ---------------------------------------------------------------------------

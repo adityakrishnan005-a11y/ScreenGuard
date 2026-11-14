@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:screenguard/services/app_version.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/policy_api.dart';
 import 'package:screenguard/services/notification_service.dart';
 import 'package:screenguard/services/update_checker.dart';
 
@@ -53,30 +53,30 @@ class FeedbackService {
   /// How long "Maybe later" postpones a request.
   static const Duration snoozeDuration = Duration(days: 7);
 
-  final DatabaseService db;
+  final PolicyApi policy;
 
   /// Override for the document location (used by tests).
   final String endpoint;
 
   Timer? _timer;
 
-  FeedbackService({required this.db, this.endpoint = defaultEndpoint});
+  FeedbackService({required this.policy, this.endpoint = defaultEndpoint});
 
   // ── Settings accessors ──────────────────────────────────────────────────
 
   /// ISO timestamp of the last network check (empty when never checked).
-  String get lastCheckTime => db.getSetting(keyLastCheck, defaultValue: '');
+  String get lastCheckTime => policy.getSetting(keyLastCheck, defaultValue: '');
 
   /// Id of the request currently stored (empty when none).
-  String get storedPromptId => db.getSetting(keyPromptId, defaultValue: '');
+  String get storedPromptId => policy.getSetting(keyPromptId, defaultValue: '');
 
   /// Id of the request the user already handled.
   String get dismissedPromptId =>
-      db.getSetting(keyDismissedId, defaultValue: '');
+      policy.getSetting(keyDismissedId, defaultValue: '');
 
   /// Moment until which the current request is postponed.
   DateTime? get snoozeUntil {
-    final raw = db.getSetting(keySnoozeUntil, defaultValue: '');
+    final raw = policy.getSetting(keySnoozeUntil, defaultValue: '');
     if (raw.isEmpty) return null;
     return DateTime.tryParse(raw);
   }
@@ -88,7 +88,7 @@ class FeedbackService {
   /// A request qualifies when it targets the running version, has not
   /// expired, was not dismissed and is not snoozed.
   Map<String, dynamic>? get activePrompt {
-    final raw = db.getSetting(keyPromptJson, defaultValue: '');
+    final raw = policy.getSetting(keyPromptJson, defaultValue: '');
     if (raw.isEmpty) return null;
 
     final prompt = _decodePrompt(raw);
@@ -143,8 +143,8 @@ class FeedbackService {
   void dismiss([String? id]) {
     final target = id ?? storedPromptId;
     if (target.isEmpty) return;
-    db.setSetting(keyDismissedId, target);
-    db.setSetting(keySnoozeUntil, '');
+    policy.setSetting(keyDismissedId, target);
+    policy.setSetting(keySnoozeUntil, '');
   }
 
   /// Postpone the stored request; it reappears after [duration].
@@ -152,13 +152,13 @@ class FeedbackService {
     final target = id ?? storedPromptId;
     if (target.isEmpty) return;
     final until = DateTime.now().add(duration ?? snoozeDuration);
-    db.setSetting(keySnoozeUntil, until.toIso8601String());
+    policy.setSetting(keySnoozeUntil, until.toIso8601String());
   }
 
   /// Forget the stored request entirely.
   void clearStoredPrompt() {
-    db.setSetting(keyPromptJson, '');
-    db.setSetting(keyPromptId, '');
+    policy.setSetting(keyPromptJson, '');
+    policy.setSetting(keyPromptId, '');
   }
 
   /// The action buttons of [prompt] as label/url pairs.
@@ -226,7 +226,7 @@ class FeedbackService {
   /// notify the user.  Never throws.
   Future<bool> fetchAndStore() async {
     final body = await _fetchDocument();
-    db.setSetting(keyLastCheck, DateTime.now().toIso8601String());
+    policy.setSetting(keyLastCheck, DateTime.now().toIso8601String());
     if (body == null) return false;
 
     final prompt = _selectPrompt(body);
@@ -236,8 +236,8 @@ class FeedbackService {
     if (id.isEmpty) return false;
 
     final changed = id != storedPromptId;
-    db.setSetting(keyPromptJson, jsonEncode(prompt));
-    db.setSetting(keyPromptId, id);
+    policy.setSetting(keyPromptJson, jsonEncode(prompt));
+    policy.setSetting(keyPromptId, id);
     return changed;
   }
 
@@ -248,7 +248,7 @@ class FeedbackService {
     final title = (prompt['title'] as String?)?.trim() ?? '';
     if (title.isEmpty) return;
     await NotificationService.show(
-      db: db,
+      policy: policy,
       eventKey: 'feedback',
       title: 'ScreenGuard — $title',
       body: 'Open ScreenGuard to see the request.',

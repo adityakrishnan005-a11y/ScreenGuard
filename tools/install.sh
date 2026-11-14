@@ -60,6 +60,20 @@ daemon_pids() { # $1 = DAEMON_BIN, $2 = bin-symlink path
     # Without this, the stale daemon keeps the single-instance lock and the
     # freshly installed one silently exits while we report success.
     if [ -n "$exe" ] && [ "${exe##*/}" = "screenguard-daemon" ]; then
+      # ...but only within THIS session. daemon.lock lives in
+      # $XDG_RUNTIME_DIR, so a daemon running under a different runtime dir
+      # (another login, a sandbox, an isolated test) cannot block us and
+      # killing it would be trespassing. An unreadable/absent value keeps the
+      # historical behaviour (assume ours) so stale-lock protection is never
+      # lost to a missing /proc entry.
+      # `cat` (not `< file`) so an unreadable root process's environ fails
+      # silently instead of printing "Permission denied" for every pid.
+      _pid_rt="$(cat "$d/environ" 2>/dev/null | tr '\0' '\n' \
+        | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -n 1)"
+      if [ -n "$_pid_rt" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] \
+         && [ "$_pid_rt" != "$XDG_RUNTIME_DIR" ]; then
+        continue
+      fi
       echo "$pid"
       continue
     fi
@@ -72,6 +86,33 @@ daemon_pids() { # $1 = DAEMON_BIN, $2 = bin-symlink path
         break
       fi
     done < <(tr '\0' '\n' < "$d/cmdline" 2>/dev/null) 2>/dev/null
+  done
+  return 0
+}
+
+# Echo pids whose resolved executable basename is exactly one of the names
+# given. Used to stop the supervisor and its worker without pgrep -f, which
+# can match our own command line.
+exe_pids() { # $@ = basenames; only this session's processes
+  local d pid exe base want rt
+  [ -n "${XDG_RUNTIME_DIR:-}" ] || return 0
+  for d in /proc/[0-9]*; do
+    pid="${d#/proc/}"
+    case "$pid" in *[!0-9]*) continue ;; esac
+    [ "$pid" = "$$" ] && continue
+    exe="$(readlink "$d/exe" 2>/dev/null || true)"
+    [ -n "$exe" ] || continue
+    base="${exe##*/}"
+    for want in "$@"; do
+      if [ "$base" = "$want" ]; then
+        rt="$(cat "$d/environ" 2>/dev/null | tr '\0' '\n' \
+          | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -n 1)"
+        if [ -z "$rt" ] || [ "$rt" = "$XDG_RUNTIME_DIR" ]; then
+          echo "$pid"
+        fi
+        break
+      fi
+    done
   done
   return 0
 }
@@ -159,9 +200,13 @@ fi
 APP_DIR="$PREFIX/opt/screenguard"
 BIN_DIR="$PREFIX/bin"
 DAEMON_BIN="$APP_DIR/screenguard-daemon"
-WATCHDOG_BIN="$APP_DIR/screenguard-watchdog"
 NOTIFY_BIN="$APP_DIR/screenguard-notify"
 KILLER_BIN="$APP_DIR/screenguard-killer"
+DIGIWELLD_BIN="$APP_DIR/digiwelld"
+SESSION_WORKER_BIN="$APP_DIR/digiwelld-session"
+USAGE_WORKER_BIN="$APP_DIR/digiwelld-usage"
+POLICY_WORKER_BIN="$APP_DIR/digiwelld-policy"
+STORE_WORKER_BIN="$APP_DIR/digiwelld-store"
 
 if [ "$SYSTEM" -eq 1 ]; then
   UNIT_DIR="/etc/systemd/user"
@@ -171,21 +216,35 @@ else
   AUTOSTART_DIR="${HOME}/.config/autostart"
 fi
 UNIT_FILE="$UNIT_DIR/screenguard.service"
+DIGIWELLD_UNIT_FILE="$UNIT_DIR/digiwelld.service"
+# Pre-rename units are removed as part of the upgrade, never left to race.
+LEGACY_BROKER_UNIT_FILE="$UNIT_DIR/screenguard-broker.service"
 AUTOSTART_FILE="$AUTOSTART_DIR/screenguard-daemon.desktop"
 
 do_uninstall() {
   log "uninstalling ScreenGuard..."
   if command -v systemctl >/dev/null 2>&1; then
     if [ "$SYSTEM" -eq 1 ]; then
-      systemctl --global disable screenguard.service 2>/dev/null || true
+      systemctl --global disable screenguard.service digiwelld.service screenguard-broker.service 2>/dev/null || true
     else
+      systemctl --user disable --now digiwelld.service 2>/dev/null || true
+      systemctl --user disable --now screenguard-broker.service 2>/dev/null || true
       systemctl --user disable --now screenguard.service 2>/dev/null || true
     fi
   fi
+  # Stop the supervisor before the daemon: a live supervisor would respawn
+  # the daemon we just killed. TERM lets it close sessions through the worker.
+  for _pid in $(exe_pids digiwelld screenguard-broker screenguard-watchdog); do
+    kill -TERM "$_pid" 2>/dev/null || true
+  done
+  sleep 1
+  for _pid in $(exe_pids digiwelld screenguard-broker screenguard-watchdog digiwelld-session digiwelld-usage digiwelld-policy digiwelld-store); do
+    kill -9 "$_pid" 2>/dev/null || true
+  done
   for _pid in $(daemon_pids "$DAEMON_BIN" "$BIN_DIR/screenguard-daemon"); do
     kill -9 "$_pid" 2>/dev/null || true
   done
-  rm -f "$UNIT_FILE" "$AUTOSTART_FILE" "$BIN_DIR/screenguard" "$BIN_DIR/screenguard-daemon" "$BIN_DIR/screenguard-watchdog" "$BIN_DIR/screenguard-notify" "$BIN_DIR/screenguard-killer"
+  rm -f "$UNIT_FILE" "$DIGIWELLD_UNIT_FILE" "$LEGACY_BROKER_UNIT_FILE" "$AUTOSTART_FILE" "$BIN_DIR/screenguard" "$BIN_DIR/screenguard-daemon" "$BIN_DIR/screenguard-watchdog" "$BIN_DIR/screenguard-notify" "$BIN_DIR/screenguard-killer" "$BIN_DIR/screenguard-broker" "$BIN_DIR/digiwelld" "$BIN_DIR/digiwelld-session" "$BIN_DIR/digiwelld-usage" "$BIN_DIR/digiwelld-policy" "$BIN_DIR/digiwelld-store" "$BIN_DIR/cinnamon_focus"
   # Remove the shadow of a distro autostart entry, but only if this installer
   # wrote it (never delete a user's own file).
   if [ -f "$AUTOSTART_DIR/screenguard-autostart.desktop" ] \
@@ -221,6 +280,48 @@ for f in screenguard screenguard-daemon; do
   [ -x "$SRC_DIR/$f" ] || die "'$f' not found next to $0 — run this script from the extracted tarball directory."
 done
 
+# --- 1a. Choose the unit that owns the daemon. digiwelld is the front door:
+# it owns the socket, the uid check, the routing table, the storage lock, the
+# crash budget and the daemon supervision. So when a digiwelld binary is
+# present, the digiwelld unit is what gets enabled and the plain daemon unit
+# is only written as a manual fallback. Both units carry Conflicts= so they
+# can never run at the same time (two daemons would fight over daemon.lock).
+HAVE_DIGIWELLD=0
+if [ -x "$SRC_DIR/digiwelld" ]; then
+  HAVE_DIGIWELLD=1
+fi
+
+# The native session worker is optional: when present, digiwelld supervises
+# it and the daemon is told to write durable session state through it.
+SESSION_WORKER_ARG=""
+if [ -x "$SRC_DIR/digiwelld-session" ]; then
+  SESSION_WORKER_ARG="--session-worker $SESSION_WORKER_BIN"
+fi
+# Same optional-worker rule for the usage read model: the supervisor routes the
+# usage domain to it and treats the Dart daemon as the writer.
+USAGE_WORKER_ARG=""
+if [ -x "$SRC_DIR/digiwelld-usage" ]; then
+  USAGE_WORKER_ARG="--usage-worker $USAGE_WORKER_BIN"
+fi
+# The policy worker owns policy writes and the focus state machine. It is the
+# only process allowed to advance getActiveFocusState().
+POLICY_WORKER_ARG=""
+if [ -x "$SRC_DIR/digiwelld-policy" ]; then
+  POLICY_WORKER_ARG="--policy-worker $POLICY_WORKER_BIN"
+fi
+# The store worker is the single SQLite writer for sessions and events. It
+# creates the database and its schema on first boot.
+STORE_WORKER_ARG=""
+if [ -x "$SRC_DIR/digiwelld-store" ]; then
+  STORE_WORKER_ARG="--store-worker $STORE_WORKER_BIN"
+fi
+OWNER_UNIT_NAME="screenguard.service"
+OWNER_UNIT_FILE="$UNIT_FILE"
+if [ "$HAVE_DIGIWELLD" -eq 1 ]; then
+  OWNER_UNIT_NAME="digiwelld.service"
+  OWNER_UNIT_FILE="$DIGIWELLD_UNIT_FILE"
+fi
+
 # --- 1b. Capture autostart state BEFORE the migration sweep below stops
 # all instances, so a previously running daemon can be restarted after the
 # files are replaced. (Matching helper daemon_pids() is defined near the
@@ -230,12 +331,19 @@ if [ -n "$(daemon_pids "$DAEMON_BIN" "$BIN_DIR/screenguard-daemon")" ]; then
   DAEMON_WAS_RUNNING=1
 fi
 UNIT_WAS_ENABLED=0
-if [ -f "$UNIT_FILE" ] && command -v systemctl >/dev/null 2>&1; then
-  if [ "$SYSTEM" -eq 1 ]; then
-    systemctl --global is-enabled --quiet screenguard.service 2>/dev/null && UNIT_WAS_ENABLED=1 || true
-  else
-    systemctl --user is-enabled --quiet screenguard.service 2>/dev/null && UNIT_WAS_ENABLED=1 || true
-  fi
+AUTOSTART_WAS_CONFIGURED=0
+if [ -f "$UNIT_FILE" ] || [ -f "$DIGIWELLD_UNIT_FILE" ] \
+   || [ -f "$LEGACY_BROKER_UNIT_FILE" ] || [ -f "$AUTOSTART_FILE" ]; then
+  AUTOSTART_WAS_CONFIGURED=1
+fi
+if [ "$AUTOSTART_WAS_CONFIGURED" -eq 1 ] && command -v systemctl >/dev/null 2>&1; then
+  for _unit in "$OWNER_UNIT_NAME" digiwelld.service screenguard-broker.service screenguard.service; do
+    if [ "$SYSTEM" -eq 1 ]; then
+      systemctl --global is-enabled --quiet "$_unit" 2>/dev/null && UNIT_WAS_ENABLED=1 || true
+    else
+      systemctl --user is-enabled --quiet "$_unit" 2>/dev/null && UNIT_WAS_ENABLED=1 || true
+    fi
+  done
 fi
 
 # --- 1c. Migration sweep. Stops watchdogs, daemons and GUIs from ANY
@@ -253,11 +361,11 @@ fi
 # Overwriting a running executable fails with "Text file busy", so updates
 # (re-runs) must stop it first. The migration sweep already stopped most or
 # all of these; the steps below make it certain.
-if [ -f "$UNIT_FILE" ] && command -v systemctl >/dev/null 2>&1; then
+if command -v systemctl >/dev/null 2>&1; then
   if [ "$SYSTEM" -eq 1 ]; then
-    systemctl stop screenguard.service 2>/dev/null || true
+    systemctl stop digiwelld.service screenguard-broker.service screenguard.service 2>/dev/null || true
   else
-    systemctl --user stop screenguard.service 2>/dev/null || true
+    systemctl --user stop digiwelld.service screenguard-broker.service screenguard.service 2>/dev/null || true
   fi
 fi
 if [ "$DAEMON_WAS_RUNNING" -eq 1 ]; then
@@ -279,21 +387,44 @@ fi
 log "installing bundle to $APP_DIR ..."
 mkdir -p "$APP_DIR" "$BIN_DIR"
 cp -a "$SRC_DIR/screenguard" "$SRC_DIR/screenguard-daemon" "$APP_DIR/"
-[ -f "$SRC_DIR/screenguard-watchdog" ] && cp -a "$SRC_DIR/screenguard-watchdog" "$APP_DIR/" && chmod +x "$APP_DIR/screenguard-watchdog"
 [ -f "$SRC_DIR/screenguard-notify" ] && cp -a "$SRC_DIR/screenguard-notify" "$APP_DIR/" && chmod +x "$APP_DIR/screenguard-notify"
 [ -f "$SRC_DIR/screenguard-killer" ] && cp -a "$SRC_DIR/screenguard-killer" "$APP_DIR/" && chmod +x "$APP_DIR/screenguard-killer"
+[ -f "$SRC_DIR/digiwelld" ] && cp -a "$SRC_DIR/digiwelld" "$APP_DIR/" && chmod +x "$APP_DIR/digiwelld"
+[ -f "$SRC_DIR/digiwelld-session" ] && cp -a "$SRC_DIR/digiwelld-session" "$APP_DIR/" && chmod +x "$APP_DIR/digiwelld-session"
+[ -f "$SRC_DIR/digiwelld-usage" ] && cp -a "$SRC_DIR/digiwelld-usage" "$APP_DIR/" && chmod +x "$APP_DIR/digiwelld-usage"
+[ -f "$SRC_DIR/digiwelld-policy" ] && cp -a "$SRC_DIR/digiwelld-policy" "$APP_DIR/" && chmod +x "$APP_DIR/digiwelld-policy"
+[ -f "$SRC_DIR/digiwelld-store" ] && cp -a "$SRC_DIR/digiwelld-store" "$APP_DIR/" && chmod +x "$APP_DIR/digiwelld-store"
+[ -f "$SRC_DIR/cinnamon_focus" ] && cp -a "$SRC_DIR/cinnamon_focus" "$APP_DIR/" && chmod +x "$APP_DIR/cinnamon_focus"
 [ -d "$SRC_DIR/data" ] && cp -a "$SRC_DIR/data" "$APP_DIR/"
 [ -d "$SRC_DIR/lib" ]  && cp -a "$SRC_DIR/lib"  "$APP_DIR/"
 chmod +x "$APP_DIR/screenguard" "$APP_DIR/screenguard-daemon"
 ln -sf "$APP_DIR/screenguard" "$BIN_DIR/screenguard"
 ln -sf "$APP_DIR/screenguard-daemon" "$BIN_DIR/screenguard-daemon"
-[ -f "$WATCHDOG_BIN" ] && ln -sf "$WATCHDOG_BIN" "$BIN_DIR/screenguard-watchdog"
 [ -f "$NOTIFY_BIN" ] && ln -sf "$NOTIFY_BIN" "$BIN_DIR/screenguard-notify"
 [ -f "$KILLER_BIN" ] && ln -sf "$KILLER_BIN" "$BIN_DIR/screenguard-killer"
+[ -f "$DIGIWELLD_BIN" ] && ln -sf "$DIGIWELLD_BIN" "$BIN_DIR/digiwelld"
+[ -f "$SESSION_WORKER_BIN" ] && ln -sf "$SESSION_WORKER_BIN" "$BIN_DIR/digiwelld-session"
+[ -f "$USAGE_WORKER_BIN" ] && ln -sf "$USAGE_WORKER_BIN" "$BIN_DIR/digiwelld-usage"
+[ -f "$POLICY_WORKER_BIN" ] && ln -sf "$POLICY_WORKER_BIN" "$BIN_DIR/digiwelld-policy"
+[ -f "$STORE_WORKER_BIN" ] && ln -sf "$STORE_WORKER_BIN" "$BIN_DIR/digiwelld-store"
+[ -f "$APP_DIR/cinnamon_focus" ] && ln -sf "$APP_DIR/cinnamon_focus" "$BIN_DIR/cinnamon_focus"
+
+# The standalone watchdog and the broker were merged into digiwelld. Remove
+# their binaries and links unconditionally so an old copy can never be
+# launched by a stale desktop entry, unit, or shell alias. These names are
+# legacy-only: this version never builds or starts them.
+rm -f "$APP_DIR/screenguard-watchdog" "$APP_DIR/screenguard-broker" \
+      "$BIN_DIR/screenguard-watchdog" "$BIN_DIR/screenguard-broker"
+
 log "binaries linked: $BIN_DIR/screenguard, $BIN_DIR/screenguard-daemon"
-[ -f "$WATCHDOG_BIN" ] && log "watchdog linked: $BIN_DIR/screenguard-watchdog"
 [ -f "$NOTIFY_BIN" ] && log "notification helper linked: $BIN_DIR/screenguard-notify"
 [ -f "$KILLER_BIN" ] && log "process killer linked: $BIN_DIR/screenguard-killer"
+[ -f "$DIGIWELLD_BIN" ] && log "supervisor linked: $BIN_DIR/digiwelld (socket, auth, routing, crash budget)"
+[ -f "$SESSION_WORKER_BIN" ] && log "session worker linked: $BIN_DIR/digiwelld-session (supervised by digiwelld)"
+[ -f "$USAGE_WORKER_BIN" ] && log "usage worker linked: $BIN_DIR/digiwelld-usage (read-only usage domain)"
+[ -f "$POLICY_WORKER_BIN" ] && log "policy worker linked: $BIN_DIR/digiwelld-policy (policy intent + focus state machine)"
+[ -f "$STORE_WORKER_BIN" ] && log "store worker linked: $BIN_DIR/digiwelld-store (single writer for sessions and events)"
+[ -f "$APP_DIR/cinnamon_focus" ] && log "Cinnamon focus helper installed: $APP_DIR/cinnamon_focus"
 
 # --- 2b. Register/refresh the application-menu launcher. For user installs
 # this entry takes precedence over a package's /usr/share entry, so after a
@@ -337,7 +468,7 @@ esac
 # On updates (re-runs) an existing autostart configuration means the user
 # already answered: preserve it instead of asking again.
 PRESERVE_CHOICE=0
-if [ -f "$UNIT_FILE" ] || [ -f "$AUTOSTART_FILE" ]; then
+if [ "$AUTOSTART_WAS_CONFIGURED" -eq 1 ]; then
   PRESERVE_CHOICE=1
   log "existing autostart configuration found — keeping your previous choice (no prompt)"
 fi
@@ -406,11 +537,42 @@ fi
 ENABLE_FAILED=0
 if [ "$HAVE_SYSTEMD_USER" -eq 1 ]; then
   mkdir -p "$UNIT_DIR"
+  # The broker unit is replaced by digiwelld.service. Remove it before
+  # daemon-reload so a stale wants-symlink cannot start the old binary.
+  rm -f "$LEGACY_BROKER_UNIT_FILE"
+  if [ "$HAVE_DIGIWELLD" -eq 1 ]; then
+    cat > "$DIGIWELLD_UNIT_FILE" <<EOF
+[Unit]
+Description=ScreenGuard Supervisor (native socket, auth, routing, daemon supervision)
+PartOf=graphical-session.target
+After=graphical-session.target
+# Never run next to the standalone daemon unit: digiwelld spawns and
+# supervises its own daemon, and two daemons would race on daemon.lock.
+Conflicts=screenguard.service
+
+[Service]
+Type=simple
+# %t is the per-user runtime dir (XDG_RUNTIME_DIR). digiwelld creates
+# %t/screenguard itself with mode 0700 and the control socket with 0600.
+ExecStart=$DIGIWELLD_BIN --runtime %t/screenguard --daemon $DAEMON_BIN $SESSION_WORKER_ARG $USAGE_WORKER_ARG $POLICY_WORKER_ARG $STORE_WORKER_ARG
+# digiwelld never exits on its own; if it dies, systemd brings it back and
+# it re-owns the socket, the crash budget and the daemon.
+Restart=always
+RestartSec=2
+# digiwelld forwards SIGTERM to its children and waits up to 5s for each.
+TimeoutStopSec=15
+KillMode=control-group
+
+[Install]
+WantedBy=graphical-session.target
+EOF
+  fi
   cat > "$UNIT_FILE" <<EOF
 [Unit]
 Description=ScreenGuard Tracker Daemon
 PartOf=graphical-session.target
 After=graphical-session.target
+Conflicts=digiwelld.service
 
 [Service]
 Type=simple
@@ -429,11 +591,12 @@ EOF
   if [ "$SYSTEM" -eq 1 ]; then
     systemctl daemon-reload 2>/dev/null || true
     if [ "$SHOULD_ENABLE" -eq 1 ]; then
-      systemctl --global enable screenguard.service 2>/dev/null \
-        && log "enabled screenguard.service globally (starts on every user login)" \
+      systemctl --global disable screenguard.service screenguard-broker.service digiwelld.service 2>/dev/null || true
+      systemctl --global enable "$OWNER_UNIT_NAME" 2>/dev/null \
+        && log "enabled $OWNER_UNIT_NAME globally (starts on every user login)" \
         || { ENABLE_FAILED=1; log "WARNING: could not enable globally; falling back to XDG autostart"; }
     else
-      log "service file refreshed; left disabled as before (enable with: systemctl enable screenguard.service)"
+      log "service file refreshed; left disabled as before (enable with: systemctl enable $OWNER_UNIT_NAME)"
     fi
   else
     systemctl --user daemon-reload 2>/dev/null || true
@@ -444,12 +607,12 @@ EOF
       # stale binary, which grabbed the single-instance lock and
       # crash-looped the freshly installed daemon (seen live: 102 restarts
       # of the new unit, "Another daemon instance is already running").
-      systemctl --user disable screenguard.service 2>/dev/null || true
-      systemctl --user enable --now screenguard.service 2>/dev/null \
-        && log "daemon installed and started (systemd user service, starts on login)" \
+      systemctl --user disable screenguard.service screenguard-broker.service digiwelld.service 2>/dev/null || true
+      systemctl --user enable --now "$OWNER_UNIT_NAME" 2>/dev/null \
+        && log "installed and started (systemd user service $OWNER_UNIT_NAME, starts on login)" \
         || { ENABLE_FAILED=1; log "WARNING: systemctl --user failed; falling back to XDG autostart"; }
     else
-      log "service file refreshed; left disabled as before (enable with: systemctl --user enable --now screenguard.service)"
+      log "service file refreshed; left disabled as before (enable with: systemctl --user enable --now $OWNER_UNIT_NAME)"
     fi
   fi
 fi
@@ -459,7 +622,7 @@ fi
 # systemd unit is actively managing the daemon (avoids double launches).
 UNIT_ACTIVE=0
 if [ "$HAVE_SYSTEMD_USER" -eq 1 ] && [ "$SYSTEM" -eq 0 ]; then
-  systemctl --user is-active --quiet screenguard.service 2>/dev/null && UNIT_ACTIVE=1 || true
+  systemctl --user is-active --quiet "$OWNER_UNIT_NAME" 2>/dev/null && UNIT_ACTIVE=1 || true
 fi
 WANT_XDG=0
 XDG_REASON=""
@@ -472,9 +635,12 @@ elif [ "$UNIT_ACTIVE" -eq 0 ] && [ "$PRESERVE_CHOICE" -eq 1 ] && [ -f "$AUTOSTAR
 fi
 if [ "$WANT_XDG" -eq 1 ]; then
   mkdir -p "$AUTOSTART_DIR"
-  # Use the watchdog as supervisor when available; falls back to daemon directly
+  # Prefer digiwelld (it owns the socket and supervises the daemon with a
+  # crash budget). The bare daemon is only a last-resort fallback.
   XDG_EXEC="$DAEMON_BIN"
-  [ -x "$WATCHDOG_BIN" ] && XDG_EXEC="$WATCHDOG_BIN"
+  if [ -x "$DIGIWELLD_BIN" ]; then
+    XDG_EXEC="$DIGIWELLD_BIN --daemon $DAEMON_BIN $SESSION_WORKER_ARG $USAGE_WORKER_ARG $POLICY_WORKER_ARG $STORE_WORKER_ARG"
+  fi
   cat > "$AUTOSTART_FILE" <<EOF
 [Desktop Entry]
 Type=Application
@@ -488,7 +654,9 @@ NoDisplay=true
 X-GNOME-Autostart-enabled=true
 EOF
   log "$XDG_REASON"
-  [ -x "$WATCHDOG_BIN" ] && log "watchdog will supervise daemon (auto-restart on crash)"
+  if [ -x "$DIGIWELLD_BIN" ]; then
+    log "digiwelld will own the socket and supervise the daemon (crash budget, auto-restart)"
+  fi
 elif [ "$UNIT_ACTIVE" -eq 1 ] && [ -f "$AUTOSTART_FILE" ]; then
   # Systemd owns autostart now; drop the shadow XDG entry so the daemon
   # isn't launched twice at login (single-instance lock would save us,
@@ -519,10 +687,30 @@ else
   # Spawn detached — a plain background child would be killed when this
   # transient service's cgroup is torn down on exit. A transient unit of
   # its own lives until the next login/logout cycle.
-  if command -v systemd-run >/dev/null 2>&1 && [ "$SYSTEM" -eq 0 ]; then
+  if [ "$HAVE_SYSTEMD_USER" -eq 1 ] && command -v systemd-run >/dev/null 2>&1 && [ "$SYSTEM" -eq 0 ]; then
     mapfile -t DAEMON_ENV < <(forward_env_args)
-    systemd-run --user --quiet --collect --unit="screenguard-daemon-$$.service" \
-      "${DAEMON_ENV[@]}" "$DAEMON_BIN" >/dev/null 2>&1 || true
+    if [ -x "$DIGIWELLD_BIN" ]; then
+      log "starting digiwelld now (it owns the socket and supervises the daemon)..."
+      systemd-run --user --quiet --collect --unit="screenguard-digiwelld-$$.service" \
+        "${DAEMON_ENV[@]}" "$DIGIWELLD_BIN" --daemon "$DAEMON_BIN" $SESSION_WORKER_ARG $USAGE_WORKER_ARG $POLICY_WORKER_ARG $STORE_WORKER_ARG >/dev/null 2>&1 || true
+    else
+      systemd-run --user --quiet --collect --unit="screenguard-daemon-$$.service" \
+        "${DAEMON_ENV[@]}" "$DAEMON_BIN" >/dev/null 2>&1 || true
+    fi
+  elif [ -x "$DIGIWELLD_BIN" ]; then
+    # No systemd user session: start the same thing the XDG autostart entry
+    # starts — digiwelld, which owns the socket, the crash budget and the
+    # daemon. Starting the bare daemon here would run without auth/routing
+    # until the next login, and its lock would then make digiwelld's daemon
+    # exit cleanly.
+    log "starting digiwelld (it owns the socket and supervises the daemon)..."
+    if command -v setsid >/dev/null 2>&1; then
+      setsid "$DIGIWELLD_BIN" --daemon "$DAEMON_BIN" $SESSION_WORKER_ARG $USAGE_WORKER_ARG $POLICY_WORKER_ARG $STORE_WORKER_ARG >/dev/null 2>&1 &
+    else
+      nohup "$DIGIWELLD_BIN" --daemon "$DAEMON_BIN" $SESSION_WORKER_ARG $USAGE_WORKER_ARG $POLICY_WORKER_ARG $STORE_WORKER_ARG >/dev/null 2>&1 &
+    fi
+  elif command -v setsid >/dev/null 2>&1; then
+    setsid "$DAEMON_BIN" >/dev/null 2>&1 &
   else
     "$DAEMON_BIN" >/dev/null 2>&1 &
   fi
@@ -554,11 +742,16 @@ if [ "$SYSTEM" -eq 0 ]; then
         -i screenguard -u normal -e 8000 >/dev/null 2>&1 || true
       log "update notification sent."
     fi
-    if command -v systemd-run >/dev/null 2>&1 && [ -f "$APP_DIR/screenguard" ]; then
+    if [ "$HAVE_SYSTEMD_USER" -eq 1 ] && command -v systemd-run >/dev/null 2>&1 && [ -f "$APP_DIR/screenguard" ]; then
       # Own transient unit (own cgroup): survives THIS service's exit and,
       # with --collect, vanishes again when the user closes the GUI.
       systemd-run --user --quiet --collect --unit="screenguard-gui-$$.service" \
         "${REOPEN_ENV[@]}" "$APP_DIR/screenguard" >/dev/null 2>&1 \
+        && log "reopened the GUI from the new install." \
+        || log "could not auto-reopen; use the app menu to open it."
+    elif [ -x "$APP_DIR/screenguard" ] && command -v setsid >/dev/null 2>&1; then
+      # No systemd to detach into: own session is enough for a GUI.
+      setsid "$APP_DIR/screenguard" >/dev/null 2>&1 \
         && log "reopened the GUI from the new install." \
         || log "could not auto-reopen; use the app menu to open it."
     fi

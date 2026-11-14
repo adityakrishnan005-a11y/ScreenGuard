@@ -2,6 +2,9 @@
 Description=ScreenGuard Tracker Daemon
 PartOf=graphical-session.target
 After=graphical-session.target
+# Prefer digiwelld.service: it owns the socket and supervises this daemon.
+# This unit is the standalone fallback (no digiwelld installed).
+Conflicts=digiwelld.service
 
 [Service]
 Type=simple

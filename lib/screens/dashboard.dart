@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/services/app_icon.dart';
 import 'package:screenguard/widgets/usage_bar.dart';
 import 'package:screenguard/widgets/app_list.dart';
@@ -65,16 +65,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _load() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
+    final api = Provider.of<ScreenGuardApi>(context, listen: false);
     setState(() {
-      _today = db.todayTotalMs();
-      _yesterday = db.yesterdayTotalMs();
-      _last30DaysTotal = db.last30DaysTotalMs();
-      _weekData = db.getWeekData(weekOffset: _weekOffset);
-      _perApp = db.perAppForDate(_selectedDate);
-      _idleToday = db.getIdleTimeForDate(_selectedDate);
-      _untracked = db.recentUnknownSessions();
-      _goal = db.getDailyGoalMs();
+      _today = api.usage.todayTotalMs();
+      _yesterday = api.usage.yesterdayTotalMs();
+      _last30DaysTotal = api.usage.last30DaysTotalMs();
+      _weekData = api.usage.getWeekData(weekOffset: _weekOffset);
+      _perApp = api.usage.perAppForDate(_selectedDate);
+      _idleToday = api.usage.getIdleTimeForDate(_selectedDate);
+      _untracked = api.usage.recentUnknownSessions();
+      _goal = api.policy.getDailyGoalMs();
     });
   }
 
@@ -104,7 +104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => SettingsScreen(db: context.read<DatabaseService>()),
+                  builder: (context) => SettingsScreen(api: context.read<ScreenGuardApi>()),
                 ),
               );
             },

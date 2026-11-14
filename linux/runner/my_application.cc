@@ -10,13 +10,98 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  // A lockout window is a kiosk overlay, not a normal app window: on X11 it is
+  // override-redirect (no window-manager frame, cannot be moved, resized,
+  // covered by the offending app, or closed through the WM).
+  gboolean lockout;
+  GtkWindow* window;
+  guint raise_source;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+// Keep the overlay above everything. An override-redirect window is not
+// managed by the window manager, so nothing else will raise it for us, and a
+// fullscreen game can otherwise call XRaiseWindow and cover it again.
+static gboolean raise_lockout_cb(gpointer data) {
+  MyApplication* self = MY_APPLICATION(data);
+  if (self->window != nullptr) {
+    GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(self->window));
+    if (gdk_window != nullptr) {
+      gdk_window_raise(gdk_window);
+    }
+  }
+  return G_SOURCE_CONTINUE;
+}
+
+static gboolean has_lockout_arg(char** args) {
+  if (args == nullptr) return FALSE;
+  for (int i = 0; args[i] != nullptr; i++) {
+    if (g_str_has_prefix(args[i], "--times-up=") ||
+        g_str_has_prefix(args[i], "--focus-block=")) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
-  gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  GtkWidget* toplevel = gtk_widget_get_toplevel(GTK_WIDGET(view));
+
+  if (self->lockout && GTK_IS_WINDOW(toplevel)) {
+    GtkWindow* window = GTK_WINDOW(toplevel);
+    self->window = window;
+    gtk_window_set_decorated(window, FALSE);
+    gtk_window_set_keep_above(window, TRUE);
+    gtk_window_set_skip_taskbar_hint(window, TRUE);
+    gtk_window_set_skip_pager_hint(window, TRUE);
+
+    GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(window));
+#ifdef GDK_WINDOWING_X11
+    if (gdk_window != nullptr && GDK_IS_X11_WINDOW(gdk_window)) {
+      // Must be set before the window is mapped. GTK has realized the
+      // toplevel by now, so the GdkWindow exists but is still unmapped.
+      gdk_window_set_override_redirect(gdk_window, TRUE);
+
+      // With no window manager there is nobody to honour "fullscreen", so
+      // size it to the monitor ourselves.
+      GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
+      GdkMonitor* monitor =
+          gdk_display_get_monitor_at_window(display, gdk_window);
+      if (monitor != nullptr) {
+        GdkRectangle geometry;
+        gdk_monitor_get_geometry(monitor, &geometry);
+        gtk_window_move(window, geometry.x, geometry.y);
+        gtk_window_set_default_size(window, geometry.width, geometry.height);
+      }
+    } else
+#endif
+    {
+      // Wayland: no override-redirect; fullscreen + keep-above is the most a
+      // normal client can ask for.
+      gtk_window_fullscreen(window);
+    }
+  }
+
+  gtk_widget_show(toplevel);
+
+  if (self->lockout && self->window != nullptr) {
+    GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(self->window));
+    if (gdk_window != nullptr) {
+      gdk_window_raise(gdk_window);
+#ifdef GDK_WINDOWING_X11
+      if (GDK_IS_X11_WINDOW(gdk_window)) {
+        // Focus is not granted by any WM for an override-redirect window.
+        gdk_window_focus(gdk_window, GDK_CURRENT_TIME);
+      }
+#endif
+    }
+    if (self->raise_source == 0) {
+      self->raise_source =
+          g_timeout_add_seconds(1, raise_lockout_cb, self);
+    }
+  }
 }
 
 // Implements GApplication::activate.
@@ -89,6 +174,7 @@ static gboolean my_application_local_command_line(GApplication* application,
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
   self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
+  self->lockout = has_lockout_arg(self->dart_entrypoint_arguments);
 
   g_autoptr(GError) error = nullptr;
   if (!g_application_register(application, nullptr, &error)) {
@@ -124,6 +210,10 @@ static void my_application_shutdown(GApplication* application) {
 // Implements GObject::dispose.
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
+  if (self->raise_source != 0) {
+    g_source_remove(self->raise_source);
+    self->raise_source = 0;
+  }
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }

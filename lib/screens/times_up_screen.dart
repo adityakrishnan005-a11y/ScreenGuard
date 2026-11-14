@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screenguard/services/app_killer.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/screenguard_api.dart';
 import 'package:screenguard/widgets/app_limit_dialog.dart';
-import 'package:screenguard/screens/dashboard.dart';
+import 'package:screenguard/services/lockout_window.dart';
 import 'package:screenguard/utils/format.dart';
 
 class TimesUpScreen extends StatelessWidget {
@@ -19,28 +19,19 @@ class TimesUpScreen extends StatelessWidget {
   });
 
   Future<void> _closeApp(BuildContext context) async {
-    // NOTE: no WM_DELETE here — the focused window is this popup, so that
-    // would close ScreenGuard itself instead of the offending app.
-    final killed = await AppKiller.close(app: app, pid: pid, politeClose: false);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(killed
-              ? '$appName was closed.'
-              : 'Could not close $appName — close it manually.'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
-    }
+    // NOTE: no WM_DELETE here — asking the compositor to close "the active
+    // window" would close this overlay instead of the offending app.
+    await AppKiller.close(app: app, pid: pid, politeClose: false);
+    // A kiosk overlay cannot be handed back to the window manager, so the
+    // lockout ends by ending the process. The daemon reopens it while the app
+    // is still running and over its limit.
+    LockoutWindow.close();
   }
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<DatabaseService>(context);
-    final limitData = db.getAppLimit(app);
+    final api = Provider.of<ScreenGuardApi>(context);
+    final limitData = api.policy.getAppLimit(app);
     final limitMs = (limitData?['limit_ms'] as int?) ?? 0;
     final extMs = (limitData?['temp_extension_ms'] as int?) ?? 0;
 
@@ -104,16 +95,8 @@ class TimesUpScreen extends StatelessWidget {
                             ),
                           ),
                           onPressed: () {
-                            db.addTempExtension(app, 60 * 1000);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Added 1 minute to $appName!'),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(builder: (_) => const DashboardScreen()),
-                            );
+                            api.policy.addTempExtension(app, 60 * 1000);
+                            LockoutWindow.close();
                           },
                           icon: const Icon(Icons.timer_outlined),
                           label: const Text('+1 Min'),
@@ -129,16 +112,8 @@ class TimesUpScreen extends StatelessWidget {
                             ),
                           ),
                           onPressed: () {
-                            db.addTempExtension(app, 15 * 60 * 1000);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Added 15 minutes to $appName today!'),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(builder: (_) => const DashboardScreen()),
-                            );
+                            api.policy.addTempExtension(app, 15 * 60 * 1000);
+                            LockoutWindow.close();
                           },
                           icon: const Icon(Icons.more_time_rounded),
                           label: const Text('+15 Min'),
@@ -191,11 +166,7 @@ class TimesUpScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: TextButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const DashboardScreen()),
-                        );
-                      },
+                      onPressed: LockoutWindow.toDashboard,
                       icon: const Icon(Icons.dashboard_rounded),
                       label: const Text('Back to Dashboard'),
                     ),

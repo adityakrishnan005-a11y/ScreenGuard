@@ -265,7 +265,7 @@ class _CrashLogCard extends StatelessWidget {
     if (type == 'unclean_shutdown') {
       icon = Icons.power_off_outlined;
       iconColor = Colors.orange;
-    } else if (source == 'watchdog') {
+    } else if (source == 'watchdog' || source == 'digiwelld') {
       icon = Icons.restart_alt;
       iconColor = Colors.red;
     } else {

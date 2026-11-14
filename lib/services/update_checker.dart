@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:screenguard/services/app_version.dart';
-import 'package:screenguard/services/db.dart';
+import 'package:screenguard/api/policy_api.dart';
 import 'package:screenguard/services/notification_service.dart';
 
 /// Lightweight auto-update checker for ScreenGuard.
@@ -35,66 +35,66 @@ class UpdateChecker {
   static const String _apiBase = 'https://api.github.com/repos/$_repoOwner/$_repoName/releases';
   static const String _currentVersion = AppVersion.current;
 
-  final DatabaseService db;
+  final PolicyApi policy;
   Timer? _checkTimer;
 
-  UpdateChecker({required this.db});
+  UpdateChecker({required this.policy});
 
   // ── Settings keys ───────────────────────────────────────────────────────
 
   bool get checkUpdatesEnabled =>
-      db.getSetting('update_check_enabled', defaultValue: '1') == '1';
+      policy.getSetting('update_check_enabled', defaultValue: '1') == '1';
 
   set checkUpdatesEnabled(bool val) =>
-      db.setSetting('update_check_enabled', val ? '1' : '0');
+      policy.setSetting('update_check_enabled', val ? '1' : '0');
 
   bool get includeBeta =>
-      db.getSetting('update_include_beta', defaultValue: '0') == '1';
+      policy.getSetting('update_include_beta', defaultValue: '0') == '1';
 
   set includeBeta(bool val) =>
-      db.setSetting('update_include_beta', val ? '1' : '0');
+      policy.setSetting('update_include_beta', val ? '1' : '0');
 
   String get checkFrequency =>
-      db.getSetting('update_check_frequency', defaultValue: 'daily');
+      policy.getSetting('update_check_frequency', defaultValue: 'daily');
 
   set checkFrequency(String val) =>
-      db.setSetting('update_check_frequency', val);
+      policy.setSetting('update_check_frequency', val);
 
   String get lastCheckTime =>
-      db.getSetting('update_last_check_time', defaultValue: '');
+      policy.getSetting('update_last_check_time', defaultValue: '');
 
   set lastCheckTime(String val) =>
-      db.setSetting('update_last_check_time', val);
+      policy.setSetting('update_last_check_time', val);
 
   String get lastKnownVersion =>
-      db.getSetting('update_last_known_version', defaultValue: '');
+      policy.getSetting('update_last_known_version', defaultValue: '');
 
   set lastKnownVersion(String val) =>
-      db.setSetting('update_last_known_version', val);
+      policy.setSetting('update_last_known_version', val);
 
   String get lastKnownVersionUrl =>
-      db.getSetting('update_last_known_url', defaultValue: '');
+      policy.getSetting('update_last_known_url', defaultValue: '');
 
   set lastKnownVersionUrl(String val) =>
-      db.setSetting('update_last_known_url', val);
+      policy.setSetting('update_last_known_url', val);
 
   String get dismissedVersion =>
-      db.getSetting('update_dismissed_version', defaultValue: '');
+      policy.getSetting('update_dismissed_version', defaultValue: '');
 
   set dismissedVersion(String val) =>
-      db.setSetting('update_dismissed_version', val);
+      policy.setSetting('update_dismissed_version', val);
 
   String get lastChangelog =>
-      db.getSetting('update_last_changelog', defaultValue: '');
+      policy.getSetting('update_last_changelog', defaultValue: '');
 
   set lastChangelog(String val) =>
-      db.setSetting('update_last_changelog', val);
+      policy.setSetting('update_last_changelog', val);
 
   bool get isPrerelease =>
-      db.getSetting('update_last_is_prerelease', defaultValue: '0') == '1';
+      policy.getSetting('update_last_is_prerelease', defaultValue: '0') == '1';
 
   set isPrerelease(bool val) =>
-      db.setSetting('update_last_is_prerelease', val ? '1' : '0');
+      policy.setSetting('update_last_is_prerelease', val ? '1' : '0');
 
   /// The current app version.
   String get currentVersion => _currentVersion;
@@ -105,10 +105,10 @@ class UpdateChecker {
   /// rpm/deb install, manual reinstall). Re-arms the check so the next
   /// update announces again; null when unchanged, downgraded, or on any
   /// storage failure (the banner must never disturb startup).
-  static String? updateNoticeOnStartup(DatabaseService db) {
+  static String? updateNoticeOnStartup(PolicyApi policy) {
     try {
-      final known = db.getSetting('app_last_seen_version', defaultValue: '');
-      db.setSetting('app_last_seen_version', _currentVersion);
+      final known = policy.getSetting('app_last_seen_version', defaultValue: '');
+      policy.setSetting('app_last_seen_version', _currentVersion);
       if (known.isNotEmpty && compareVersions(_currentVersion, known) > 0) {
         return _currentVersion;
       }
@@ -498,7 +498,7 @@ class UpdateChecker {
   void _sendUpdateNotification(String version, bool isBeta) {
     final label = isBeta ? 'Beta Update' : 'Update Available';
     NotificationService.show(
-      db: db,
+      policy: policy,
       eventKey: 'update',
       title: 'ScreenGuard — $label',
       body: 'Version $version is available. Open Settings → Updates to install.',

@@ -27,9 +27,37 @@ void _ensureSqliteLoaded() {
   }
 }
 
+/// Out-of-process writer for the session/event stream.
+///
+/// `digiwelld-store` owns the SQLite write lock once it is configured. The
+/// daemon keeps a read-write handle for reads and recovery, but every
+/// mutation goes through this sink so two processes can never interleave a
+/// close with an open. Without a sink (older install, GUI fallback, tests)
+/// DatabaseService writes locally exactly as before.
+abstract class StorageWriteSink {
+  void recordEvent(String kind, {int? at, String? app, String? detail});
+
+  int openSession({
+    required String app,
+    String? appName,
+    String? title,
+    int? pid,
+    required int startedAt,
+    required bool idle,
+  });
+
+  void closeSession(int id, int endedAt);
+
+  int closeOrphanedSessions({int maxDurationMs = 10000, int? preserveId});
+}
+
 class DatabaseService {
   late final Database db;
   late final String path;
+
+  /// When set, the mutating methods below delegate here instead of touching
+  /// SQLite directly. The daemon installs it from SCREENGUARD_STORE_SOCKET.
+  StorageWriteSink? writeSink;
 
   String _resolvePath() {
     final home = Platform.environment['HOME'];
@@ -103,28 +131,116 @@ class DatabaseService {
       );
     ''');
     try {
-      db.execute('ALTER TABLE active_focus_state ADD COLUMN is_paused INTEGER DEFAULT 0;');
+      db.execute(
+          'ALTER TABLE active_focus_state ADD COLUMN is_paused INTEGER DEFAULT 0;');
     } catch (_) {}
     try {
-      db.execute('ALTER TABLE active_focus_state ADD COLUMN remaining_seconds INTEGER DEFAULT 0;');
+      db.execute(
+          'ALTER TABLE active_focus_state ADD COLUMN remaining_seconds INTEGER DEFAULT 0;');
     } catch (_) {}
     try {
-      db.execute('ALTER TABLE active_focus_state ADD COLUMN current_cycle INTEGER DEFAULT 1;');
+      db.execute(
+          'ALTER TABLE active_focus_state ADD COLUMN current_cycle INTEGER DEFAULT 1;');
     } catch (_) {}
     try {
-      db.execute('ALTER TABLE active_focus_state ADD COLUMN total_cycles INTEGER DEFAULT 1;');
+      db.execute(
+          'ALTER TABLE active_focus_state ADD COLUMN total_cycles INTEGER DEFAULT 1;');
     } catch (_) {}
     try {
-      db.execute('ALTER TABLE active_focus_state ADD COLUMN is_break INTEGER DEFAULT 0;');
+      db.execute(
+          'ALTER TABLE active_focus_state ADD COLUMN is_break INTEGER DEFAULT 0;');
     } catch (_) {}
     try {
-      db.execute('ALTER TABLE active_focus_state ADD COLUMN break_duration_minutes INTEGER DEFAULT 5;');
+      db.execute(
+          'ALTER TABLE active_focus_state ADD COLUMN break_duration_minutes INTEGER DEFAULT 5;');
     } catch (_) {}
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        app TEXT,
+        detail TEXT
+      );
+    ''');
     db.execute(
         'CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);');
+    db.execute('CREATE INDEX IF NOT EXISTS idx_events_at ON events(at);');
+    db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_events_kind_at ON events(kind, at);');
     db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_app ON sessions(app);');
     _migrateCorruptedAppNames();
     _purgeDesktopShellSessions();
+    _pruneEvents(keepDays: eventRetentionDays);
+  }
+
+  /// Event kinds. Events are the *transition* stream (what changed and when),
+  /// not the aggregate usage facts in `sessions`. Keeping them separate means
+  /// "how long did I use Firefox today" stays a cheap SUM, while "when did the
+  /// screen lock / the day roll over / the daemon restart" becomes answerable.
+  static const String evSessionOpen = 'session.open';
+  static const String evSessionClose = 'session.close';
+  static const String evIdleEnter = 'idle.enter';
+  static const String evIdleLeave = 'idle.leave';
+  static const String evDayRollover = 'day.rollover';
+  static const String evDaemonStart = 'daemon.start';
+  static const String evDaemonStop = 'daemon.stop';
+  static const String evLock = 'lock';
+  static const String evUnlock = 'unlock';
+  static const String evSuspend = 'suspend';
+  static const String evResume = 'resume';
+
+  /// Events older than this are dropped on startup. The stream is diagnostic
+  /// and backfill material, not the source of truth for totals.
+  static const int eventRetentionDays = 90;
+
+  /// Append one transition. Best-effort by design: losing an event must never
+  /// break tracking or a policy write.
+  void recordEvent(String kind, {int? at, String? app, String? detail}) {
+    final sink = writeSink;
+    if (sink != null) {
+      sink.recordEvent(kind, at: at, app: app, detail: detail);
+      return;
+    }
+    try {
+      db.execute(
+        'INSERT INTO events (at, kind, app, detail) VALUES (?,?,?,?)',
+        [at ?? DateTime.now().millisecondsSinceEpoch, kind, app, detail],
+      );
+    } catch (_) {}
+  }
+
+  /// Most recent events, newest first. Read-only.
+  List<Map<String, dynamic>> recentEvents({int limit = 200}) {
+    final bounded = limit <= 0 ? 1 : (limit > 2000 ? 2000 : limit);
+    return db.select('SELECT * FROM events ORDER BY at DESC, id DESC LIMIT ?;',
+        [bounded]).cast<Map<String, dynamic>>();
+  }
+
+  int eventCount() {
+    final rows = db.select('SELECT COUNT(*) AS n FROM events;');
+    return rows.first['n'] as int;
+  }
+
+  /// Every event inside one local calendar day, oldest first.
+  List<Map<String, dynamic>> eventsForDay(DateTime day) {
+    final start = dayStartMs(day);
+    final end = nextDayStartMs(day);
+    return db.select(
+        'SELECT * FROM events WHERE at >= ? AND at < ? ORDER BY at, id;',
+        [start, end]).cast<Map<String, dynamic>>();
+  }
+
+  int _pruneEvents({int keepDays = eventRetentionDays}) {
+    try {
+      final cutoff = DateTime.now()
+          .subtract(Duration(days: keepDays))
+          .millisecondsSinceEpoch;
+      db.execute('DELETE FROM events WHERE at < ?;', [cutoff]);
+      return db.updatedRows;
+    } catch (_) {
+      return 0;
+    }
   }
 
   /// One-time cleanup for history recorded before desktop-shell windows
@@ -141,11 +257,16 @@ class DatabaseService {
 
   void _migrateCorruptedAppNames() {
     try {
-      db.execute("UPDATE sessions SET app_name = 'Firefox' WHERE (app = 'org.mozilla.firefox' OR app = 'firefox') AND (app_name LIKE 'Open the Profile Manager%' OR app_name LIKE 'Open a New %' OR app_name IS NULL);");
-      db.execute("UPDATE sessions SET app_name = 'Chromium' WHERE (app = 'chromium-browser' OR app = 'chromium') AND (app_name LIKE 'Open a New %' OR app_name IS NULL);");
-      db.execute("UPDATE sessions SET app_name = 'Files' WHERE app LIKE '%nautilus%' AND (app_name = 'New Window' OR app_name IS NULL);");
-      db.execute("UPDATE sessions SET app_name = 'Terminal' WHERE app LIKE '%ptyxis%' AND (app_name = 'Preferences' OR app_name LIKE 'New %' OR app_name IS NULL);");
-      db.execute("UPDATE sessions SET app_name = 'Text Editor' WHERE app LIKE '%texteditor%' AND (app_name = 'New Window' OR app_name IS NULL);");
+      db.execute(
+          "UPDATE sessions SET app_name = 'Firefox' WHERE (app = 'org.mozilla.firefox' OR app = 'firefox') AND (app_name LIKE 'Open the Profile Manager%' OR app_name LIKE 'Open a New %' OR app_name IS NULL);");
+      db.execute(
+          "UPDATE sessions SET app_name = 'Chromium' WHERE (app = 'chromium-browser' OR app = 'chromium') AND (app_name LIKE 'Open a New %' OR app_name IS NULL);");
+      db.execute(
+          "UPDATE sessions SET app_name = 'Files' WHERE app LIKE '%nautilus%' AND (app_name = 'New Window' OR app_name IS NULL);");
+      db.execute(
+          "UPDATE sessions SET app_name = 'Terminal' WHERE app LIKE '%ptyxis%' AND (app_name = 'Preferences' OR app_name LIKE 'New %' OR app_name IS NULL);");
+      db.execute(
+          "UPDATE sessions SET app_name = 'Text Editor' WHERE app LIKE '%texteditor%' AND (app_name = 'New Window' OR app_name IS NULL);");
     } catch (_) {}
   }
 
@@ -157,22 +278,64 @@ class DatabaseService {
     required int startedAt,
     required bool idle,
   }) {
+    final sink = writeSink;
+    if (sink != null) {
+      return sink.openSession(
+        app: app,
+        appName: appName,
+        title: title,
+        pid: pid,
+        startedAt: startedAt,
+        idle: idle,
+      );
+    }
     db.execute(
       'INSERT INTO sessions (app, app_name, title, pid, started_at, idle) VALUES (?,?,?,?,?,?)',
       [app, appName, title, pid, startedAt, idle ? 1 : 0],
     );
-    return db.lastInsertRowId;
+    final id = db.lastInsertRowId;
+    recordEvent(evSessionOpen,
+        at: startedAt, app: app, detail: 'id=$id idle=${idle ? 1 : 0}');
+    return id;
   }
 
+  /// One session row, or null when [id] no longer exists. The session-memory
+  /// recovery path uses this to verify that the row it remembers is still open
+  /// before adopting it.
+  Map<String, dynamic>? getSession(int id) {
+    final rows = db.select('SELECT * FROM sessions WHERE id = ?;', [id]);
+    if (rows.isEmpty) return null;
+    return Map<String, dynamic>.from(rows.first);
+  }
+
+  /// Close an open session exactly once.
+  ///
+  /// Two recovery paths can legitimately race here: the tracker's own
+  /// slow-restart handler and the C session worker's startup decision. Both
+  /// may report the same id, so the `ended_at IS NULL` guard makes a repeated
+  /// close a no-op instead of moving the end time forward.
   void closeSession(int id, int endedAt) {
-    final rows = db.select('SELECT started_at FROM sessions WHERE id = ?', [id]);
+    final sink = writeSink;
+    if (sink != null) {
+      sink.closeSession(id, endedAt);
+      return;
+    }
+    final rows = db.select(
+        'SELECT started_at, app FROM sessions '
+        'WHERE id = ? AND ended_at IS NULL;',
+        [id]);
     if (rows.isEmpty) return;
     final started = rows.first['started_at'] as int;
+    final app = rows.first['app'] as String?;
     final duration = endedAt > started ? endedAt - started : 0;
     db.execute(
-      'UPDATE sessions SET ended_at = ?, duration_ms = ? WHERE id = ?',
+      'UPDATE sessions SET ended_at = ?, duration_ms = ? '
+      'WHERE id = ? AND ended_at IS NULL;',
       [endedAt, duration, id],
     );
+    if (db.updatedRows == 0) return;
+    recordEvent(evSessionClose,
+        at: endedAt, app: app, detail: 'id=$id durationMs=$duration');
   }
 
   /// Desktop shell components whose windows represent the wallpaper/panel,
@@ -208,7 +371,8 @@ class DatabaseService {
   int yesterdayTotalMs() {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
-    final yesterdayStart = todayStart.subtract(const Duration(days: 1)).millisecondsSinceEpoch;
+    final yesterdayStart =
+        todayStart.subtract(const Duration(days: 1)).millisecondsSinceEpoch;
     final yesterdayEnd = todayStart.millisecondsSinceEpoch - 1;
 
     final rows = db.select(
@@ -219,12 +383,10 @@ class DatabaseService {
   }
 
   List<Map<String, dynamic>> appHistory(String app, {int days = 7}) {
-    return db
-        .select(
-          "SELECT date(started_at/1000,'unixepoch','localtime') AS d, SUM(duration_ms) AS t FROM sessions WHERE idle=0 AND app = ? AND started_at >= strftime('%s','now',?,'start of day')*1000 GROUP BY d ORDER BY d;",
-          [app, '-${days - 1} day'],
-        )
-        .cast<Map<String, dynamic>>();
+    return db.select(
+      "SELECT date(started_at/1000,'unixepoch','localtime') AS d, SUM(duration_ms) AS t FROM sessions WHERE idle=0 AND app = ? AND started_at >= strftime('%s','now',?,'start of day')*1000 GROUP BY d ORDER BY d;",
+      [app, '-${days - 1} day'],
+    ).cast<Map<String, dynamic>>();
   }
 
   int recentUnknownSessions({int minutes = 10}) {
@@ -248,6 +410,53 @@ class DatabaseService {
       [nowMs, ...appList, start],
     );
     return rows.first['t'] as int;
+  }
+
+  /// When the app was last in the foreground, in ms, or null if it has never
+  /// been seen. `idle` sessions do not count: standby is about not being used,
+  /// and an idle session is the absence of use.
+  int? lastAppActivityMs(String app, {List<String>? aliases}) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final appList = (aliases != null && aliases.isNotEmpty)
+        ? (aliases.contains(app) ? aliases : [app, ...aliases])
+        : [app];
+    final placeholders = List.filled(appList.length, '?').join(',');
+    final rows = db.select(
+      "SELECT MAX(CASE WHEN ended_at IS NULL THEN ? ELSE ended_at END) AS last "
+      "FROM sessions WHERE idle=0 AND app IN ($placeholders);",
+      [nowMs, ...appList],
+    );
+    return rows.first['last'] as int?;
+  }
+
+  /// Android's `isAppInactive`: true when the app has not been in the
+  /// foreground for [inactiveAfterMs]. This is derived from session gaps, not
+  /// from whether a process is alive — a background download keeps a process
+  /// running but is still inactive from the user's point of view.
+  bool isAppInactive(
+    String app, {
+    List<String>? aliases,
+    int inactiveAfterMs = 12 * 60 * 60 * 1000,
+  }) {
+    final last = lastAppActivityMs(app, aliases: aliases);
+    if (last == null) return true;
+    return DateTime.now().millisecondsSinceEpoch - last >= inactiveAfterMs;
+  }
+
+  /// Every tracked app whose last foreground use is older than
+  /// [inactiveAfterMs], computed in one query.
+  List<String> inactiveApps({int inactiveAfterMs = 12 * 60 * 60 * 1000}) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final cutoff = nowMs - inactiveAfterMs;
+    return db
+        .select(
+          "SELECT app, MAX(CASE WHEN ended_at IS NULL THEN ? ELSE ended_at END) AS last "
+          "FROM sessions WHERE $_excludedAppsFilter GROUP BY app "
+          "HAVING last < ? ORDER BY last;",
+          [nowMs, cutoff],
+        )
+        .map((row) => row['app'] as String)
+        .toList();
   }
 
   Map<String, dynamic>? getAppLimit(String app, {List<String>? aliases}) {
@@ -292,7 +501,8 @@ class DatabaseService {
   }
 
   void toggleDistractingApp(String app) {
-    final exists = db.select('SELECT app FROM distracting_apps WHERE app = ?', [app]);
+    final exists =
+        db.select('SELECT app FROM distracting_apps WHERE app = ?', [app]);
     if (exists.isNotEmpty) {
       db.execute('DELETE FROM distracting_apps WHERE app = ?', [app]);
     } else {
@@ -311,18 +521,28 @@ class DatabaseService {
     return false;
   }
 
-  void startFocusSession(int durationMinutes, {int? totalCycles, int? breakMinutes}) {
+  void startFocusSession(int durationMinutes,
+      {int? totalCycles, int? breakMinutes}) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final endTime = now + (durationMinutes * 60 * 1000);
     final remainingSec = durationMinutes * 60;
-    final cycles = totalCycles ?? (isPomodoroLoopEnabled() ? getPomodoroCyclesCount() : 1);
+    final cycles =
+        totalCycles ?? (isPomodoroLoopEnabled() ? getPomodoroCyclesCount() : 1);
     final brkMins = breakMinutes ?? getPomodoroBreakMinutes();
 
     db.execute(
       'INSERT INTO active_focus_state (id, end_time_ms, duration_minutes, is_paused, remaining_seconds, current_cycle, total_cycles, is_break, break_duration_minutes) VALUES (1, ?, ?, 0, ?, 1, ?, 0, ?) ON CONFLICT(id) DO UPDATE SET end_time_ms = ?, duration_minutes = ?, is_paused = 0, remaining_seconds = ?, current_cycle = 1, total_cycles = ?, is_break = 0, break_duration_minutes = ?;',
       [
-        endTime, durationMinutes, remainingSec, cycles, brkMins,
-        endTime, durationMinutes, remainingSec, cycles, brkMins
+        endTime,
+        durationMinutes,
+        remainingSec,
+        cycles,
+        brkMins,
+        endTime,
+        durationMinutes,
+        remainingSec,
+        cycles,
+        brkMins
       ],
     );
     db.execute(
@@ -352,7 +572,8 @@ class DatabaseService {
     final fallbackMins = isBreak
         ? (state['break_duration_minutes'] as int? ?? 5)
         : (state['duration_minutes'] as int? ?? 25);
-    final remainingSec = (state['remaining_seconds'] as int?) ?? (fallbackMins * 60);
+    final remainingSec =
+        (state['remaining_seconds'] as int?) ?? (fallbackMins * 60);
     final now = DateTime.now().millisecondsSinceEpoch;
     final newEndTime = now + (remainingSec * 1000);
     db.execute(
@@ -394,7 +615,8 @@ class DatabaseService {
               'UPDATE active_focus_state SET is_break = 1, end_time_ms = ?, remaining_seconds = ? WHERE id = 1;',
               [breakEndMs, breakSec],
             );
-            final updated = db.select('SELECT * FROM active_focus_state WHERE id = 1');
+            final updated =
+                db.select('SELECT * FROM active_focus_state WHERE id = 1');
             return updated.first.cast<String, dynamic>();
           } else {
             // No break duration configured: transition directly to next Focus cycle
@@ -409,7 +631,8 @@ class DatabaseService {
               'INSERT INTO focus_sessions (started_at, duration_minutes, completed) VALUES (?, ?, 0)',
               [now, workDurationMins],
             );
-            final updated = db.select('SELECT * FROM active_focus_state WHERE id = 1');
+            final updated =
+                db.select('SELECT * FROM active_focus_state WHERE id = 1');
             return updated.first.cast<String, dynamic>();
           }
         } else {
@@ -431,7 +654,8 @@ class DatabaseService {
             'INSERT INTO focus_sessions (started_at, duration_minutes, completed) VALUES (?, ?, 0)',
             [now, workDurationMins],
           );
-          final updated = db.select('SELECT * FROM active_focus_state WHERE id = 1');
+          final updated =
+              db.select('SELECT * FROM active_focus_state WHERE id = 1');
           return updated.first.cast<String, dynamic>();
         } else {
           db.execute('DELETE FROM active_focus_state WHERE id = 1');
@@ -445,11 +669,14 @@ class DatabaseService {
   void cancelFocusSession() {
     final now = DateTime.now().millisecondsSinceEpoch;
     db.execute('DELETE FROM active_focus_state WHERE id = 1');
-    db.execute('UPDATE focus_sessions SET ended_at = ?, completed = 0 WHERE ended_at IS NULL', [now]);
+    db.execute(
+        'UPDATE focus_sessions SET ended_at = ?, completed = 0 WHERE ended_at IS NULL',
+        [now]);
   }
 
   Map<String, dynamic>? getLastFocusSession() {
-    final rows = db.select('SELECT * FROM focus_sessions ORDER BY id DESC LIMIT 1');
+    final rows =
+        db.select('SELECT * FROM focus_sessions ORDER BY id DESC LIMIT 1');
     if (rows.isEmpty) return null;
     return rows.first.cast<String, dynamic>();
   }
@@ -473,22 +700,24 @@ class DatabaseService {
   }
 
   List<Map<String, dynamic>> perAppForDate(DateTime date, {int limit = 10}) {
-    final start = DateTime(date.year, date.month, date.day).millisecondsSinceEpoch;
-    final end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+    final start =
+        DateTime(date.year, date.month, date.day).millisecondsSinceEpoch;
+    final end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999)
+        .millisecondsSinceEpoch;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final effectiveEnd = end < nowMs ? end : nowMs;
 
-    return db
-        .select(
-          "SELECT app, app_name, SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ? GROUP BY app ORDER BY t DESC LIMIT ?;",
-          [effectiveEnd, start, end, limit],
-        )
-        .cast<Map<String, dynamic>>();
+    return db.select(
+      "SELECT app, app_name, SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ? AND started_at <= ? GROUP BY app ORDER BY t DESC LIMIT ?;",
+      [effectiveEnd, start, end, limit],
+    ).cast<Map<String, dynamic>>();
   }
 
   int getIdleTimeForDate(DateTime date) {
-    final start = DateTime(date.year, date.month, date.day).millisecondsSinceEpoch;
-    final end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+    final start =
+        DateTime(date.year, date.month, date.day).millisecondsSinceEpoch;
+    final end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999)
+        .millisecondsSinceEpoch;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final effectiveEnd = end < nowMs ? end : nowMs;
 
@@ -509,7 +738,8 @@ class DatabaseService {
     for (int i = 0; i < 7; i++) {
       final day = startOfWindow.add(Duration(days: i));
       final dayStart = day.millisecondsSinceEpoch;
-      final dayEnd = DateTime(day.year, day.month, day.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+      final dayEnd = DateTime(day.year, day.month, day.day, 23, 59, 59, 999)
+          .millisecondsSinceEpoch;
 
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       final effectiveEnd = dayEnd < nowMs ? dayEnd : nowMs;
@@ -519,7 +749,8 @@ class DatabaseService {
         [effectiveEnd, dayStart, dayEnd],
       );
       final totalMs = rows.first['t'] as int;
-      final dateStr = '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+      final dateStr =
+          '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
       result.add({'d': dateStr, 't': totalMs, 'date': day});
     }
     return result;
@@ -528,7 +759,9 @@ class DatabaseService {
   int last30DaysTotalMs() {
     final now = DateTime.now();
     final nowMs = now.millisecondsSinceEpoch;
-    final start = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 29)).millisecondsSinceEpoch;
+    final start = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(days: 29))
+        .millisecondsSinceEpoch;
     final rows = db.select(
       "SELECT COALESCE(SUM(CASE WHEN ended_at IS NULL THEN MAX(0, ? - started_at) ELSE duration_ms END), 0) AS t FROM sessions WHERE idle=0 AND $_excludedAppsFilter AND started_at >= ?;",
       [nowMs, start],
@@ -537,7 +770,8 @@ class DatabaseService {
   }
 
   int getDailyGoalMs() {
-    final rows = db.select('SELECT value FROM settings WHERE key = ?;', ['daily_goal_ms']);
+    final rows = db
+        .select('SELECT value FROM settings WHERE key = ?;', ['daily_goal_ms']);
     if (rows.isEmpty || rows.first['value'] == null) {
       return 0;
     }
@@ -557,7 +791,8 @@ class DatabaseService {
 
   final Map<String, String> _settingsCache = {};
   int _lastSettingsFetchMs = 0;
-  static const int _settingsCacheTtlMs = 10000; // 10-second TTL to pick up GUI changes
+  static const int _settingsCacheTtlMs =
+      10000; // 10-second TTL to pick up GUI changes
 
   void _refreshSettingsCache() {
     _settingsCache.clear();
@@ -671,9 +906,7 @@ class DatabaseService {
   /// 1-minute save grace: timestamp (ms) until which [app] is exempt from
   /// focus blocking, set from the focus warning screen.
   int getFocusGraceUntilMs(String app) {
-    return int.tryParse(
-            getSetting('focus_grace_$app', defaultValue: '0')) ??
-        0;
+    return int.tryParse(getSetting('focus_grace_$app', defaultValue: '0')) ?? 0;
   }
 
   void setFocusGraceMinutes(String app, int minutes) {
@@ -714,7 +947,9 @@ class DatabaseService {
   int getOvertimeMilestoneIndex(String dateKey) {
     final savedDate = getSetting('overtime_milestone_date');
     if (savedDate != dateKey) return 0;
-    return int.tryParse(getSetting('overtime_milestone_index', defaultValue: '0')) ?? 0;
+    return int.tryParse(
+            getSetting('overtime_milestone_index', defaultValue: '0')) ??
+        0;
   }
 
   void setOvertimeMilestoneIndex(String dateKey, int index) {
@@ -775,7 +1010,11 @@ class DatabaseService {
       'DELETE FROM focus_sessions WHERE started_at >= ? AND started_at < ?;',
       [startMs, endMs],
     );
-    return sessions + db.getUpdatedRows();
+    final focus = db.getUpdatedRows();
+    db.execute(
+        'DELETE FROM events WHERE at >= ? AND at < ?;', [startMs, endMs]);
+    final events = db.updatedRows;
+    return sessions + focus + events;
   }
 
   /// Delete usage history from [from] (inclusive) to [to] (inclusive day).
@@ -805,6 +1044,8 @@ class DatabaseService {
     var n = db.getUpdatedRows();
     db.execute('DELETE FROM focus_sessions;');
     n += db.getUpdatedRows();
+    db.execute('DELETE FROM events;');
+    n += db.updatedRows;
     try {
       db.execute('DELETE FROM active_focus_state;');
     } catch (_) {}
@@ -835,21 +1076,32 @@ class DatabaseService {
   /// `now - started_at` formula. The orphan's real end is unknowable, so its
   /// duration is capped at [maxDurationMs] (one honest polling interval).
   /// Returns the number of rows repaired.
-  int closeOrphanedSessions({int maxDurationMs = 10000}) {
+  ///
+  /// [preserveId] is the session the session-memory journal just resumed. It
+  /// is still genuinely open, so it must not be treated as an orphan.
+  int closeOrphanedSessions({int maxDurationMs = 10000, int? preserveId}) {
+    final sink = writeSink;
+    if (sink != null) {
+      return sink.closeOrphanedSessions(
+          maxDurationMs: maxDurationMs, preserveId: preserveId);
+    }
     try {
       final rows = db.select(
         'SELECT id, started_at FROM sessions WHERE ended_at IS NULL;',
       );
+      var repaired = 0;
       for (final r in rows) {
         final id = r['id'] as int;
+        if (preserveId != null && id == preserveId) continue;
         final started = r['started_at'] as int;
         final ended = started + maxDurationMs;
         db.execute(
           'UPDATE sessions SET ended_at = ?, duration_ms = ? WHERE id = ?;',
           [ended, maxDurationMs, id],
         );
+        repaired++;
       }
-      return rows.length;
+      return repaired;
     } catch (_) {
       return 0;
     }
